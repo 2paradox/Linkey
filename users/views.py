@@ -19,6 +19,7 @@ from datetime import date
 from django.db.models import Q
 from .decorators import login_required
 from django.db.models.functions import ExtractYear
+from django.shortcuts import render
 
 import json
 
@@ -258,3 +259,10 @@ def recommend_users(request):
     results = [{'username': r_user.username, 'name': r_user.first_name, 'major': r_user.profile.major, 'grade': r_user.profile.grade} for r_user in recommended_users]
 
     return JsonResponse({'results': results})
+
+def home(request):
+    return render(request, 'index.html')
+
+# 메인 페이지를 보여주는 view
+def main_page(request):
+    return render(request, 'main.html')

@@ -72,6 +72,9 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
             ],
         },
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [os.path.join(BASE_DIR, 'frontend')], # <--- 이 부분을 수정
+        'APP_DIRS': True,
     },
 ]
 
