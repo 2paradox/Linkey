@@ -77,7 +77,7 @@
     </div>
 
     <script>
-        const API_BASE_URL = 'http://127.0.0.1:8000/api/users';
+        const API_BASE_URL = '/api/users';
         const loginPage = document.getElementById('login-page');
         const signupPage = document.getElementById('signup-page');
         const goToSignupLink = document.getElementById('go-to-signup');
@@ -195,7 +195,7 @@
                 resultDiv.innerHTML = `<p><strong>상태 코드:</strong> ${response.status}</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
                 if (response.ok && data.access_token) {
                     localStorage.setItem('accessToken', data.access_token);
-                    window.location.href = 'main.html';
+                    window.location.href = '/main/';
                 }
             } catch (error) {
                 resultDiv.textContent = `오류 발생: ${error.message}`;
