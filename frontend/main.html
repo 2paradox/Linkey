@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메인 페이지</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; margin: 0; background-color: #f4f7f6; }
+        .header { background-color: white; padding: 15px 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .header h2 { margin: 0; font-size: 20px; }
+        .header button { padding: 8px 15px; font-size: 14px; font-weight: bold; cursor: pointer; background: #dc3545; color: white; border: none; border-radius: 8px; }
+        .container { max-width: 800px; margin: 30px auto; padding: 20px; }
+        #user-info { text-align: center; margin-bottom: 30px; font-size: 18px; }
+        #recommendation-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+        .card { background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); padding: 20px; text-align: center; }
+        .card h3 { margin-top: 0; margin-bottom: 10px; font-size: 18px; }
+        .card p { margin: 5px 0; color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h2 id="user-info">불러오는 중...</h2>
+        <button id="logout-button">로그아웃</button>
+    </header>
+
+    <main class="container">
+        <div id="recommendation-list">
+            </div>
+    </main>
+
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:8000/api/users';
+        const userInfoDiv = document.getElementById('user-info');
+        const logoutButton = document.getElementById('logout-button');
+        const recommendationListDiv = document.getElementById('recommendation-list');
+
+        // 페이지 로드 시 실행
+        window.addEventListener('load', async () => {
+            const token = localStorage.getItem('accessToken');
+
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                window.location.href = 'index.html';
+                return;
+            }
+
+            // 1. 내 정보 불러오기
+            try {
+                const response = await fetch(`${API_BASE_URL}/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    userInfoDiv.textContent = `${data.username}님, 환영합니다!`;
+                    // 2. 내 정보 로딩 성공 후, 추천 목록 불러오기
+                    loadRecommendations(token);
+                } else {
+                    throw new Error('세션 만료');
+                }
+            } catch (error) {
+                alert('세션이 만료되었거나 오류가 발생했습니다. 다시 로그인해주세요.');
+                localStorage.removeItem('accessToken');
+                window.location.href = 'index.html';
+            }
+        });
+
+        // 추천 목록 불러오는 함수
+        async function loadRecommendations(token) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/recommendations`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                recommendationListDiv.innerHTML = ''; // 기존 목록 비우기
+
+                if (data.results.length === 0) {
+                    recommendationListDiv.innerHTML = '<p>매칭 상대를 찾을 수 없습니다. 선호 조건을 변경해보세요!</p>';
+                    return;
+                }
+
+                data.results.forEach(user => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        <h3>${user.name} (${user.username})</h3>
+                        <p>${user.major}</p>
+                        <p>${user.grade}학년</p>
+                    `;
+                    recommendationListDiv.appendChild(card);
+                });
+
+            } catch (error) {
+                console.error('추천 목록 로딩 오류:', error);
+                recommendationListDiv.innerHTML = '<p>추천 상대를 불러오는 데 실패했습니다.</p>';
+            }
+        }
+
+        // 로그아웃 버튼
+        logoutButton.addEventListener('click', () => {
+            localStorage.removeItem('accessToken');
+            alert('로그아웃되었습니다.');
+            window.location.href = 'index.html';
+        });
+    </script>
+</body>
+</html>

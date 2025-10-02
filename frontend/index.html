@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로그인</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px 0; background-color: #f4f7f6; }
+        .container { width: 100%; max-width: 400px; padding: 40px; background-color: white; box-shadow: 0 4px 20px rgba(0,0,0,0.1); border-radius: 12px; }
+        h2 { text-align: center; color: #333; margin-bottom: 30px; }
+        form { display: flex; flex-direction: column; gap: 12px; }
+        input, select { padding: 12px; font-size: 16px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        button { padding: 12px; font-size: 16px; font-weight: bold; cursor: pointer; background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%); color: white; border: none; border-radius: 8px; transition: opacity 0.2s; margin-top: 10px; }
+        button:hover { opacity: 0.9; }
+        .switch-link { color: #4b6cb7; text-decoration: underline; cursor: pointer; text-align: center; display: block; margin-top: 20px; }
+        #result { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; font-size: 14px; }
+        .hidden { display: none; }
+        .input-group { display: flex; gap: 8px; align-items: center; }
+        .input-group input { flex-grow: 1; }
+        .input-group button { padding: 0 15px; height: 45px; line-height: 45px; font-size: 14px; margin-top: 0; background: #6c757d; flex-shrink: 0; }
+        #username-check-result, #password-check-result { font-size: 12px; height: 15px; margin-top: -5px; margin-bottom: 5px; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="login-page">
+            <h2>로그인</h2>
+            <form id="login-form">
+                <input type="text" id="login-username" placeholder="아이디" required>
+                <input type="password" id="login-password" placeholder="비밀번호" required>
+                <button type="submit">로그인</button>
+            </form>
+            <p class="switch-link" id="go-to-signup">계정이 없으신가요? 회원가입</p>
+        </div>
+
+        <div id="signup-page" class="hidden">
+            <h2>회원가입</h2>
+            <form id="signup-form">
+                <div class="input-group">
+                    <input type="text" id="signup-username" placeholder="아이디" required>
+                    <button type="button" id="check-username-button">중복 확인</button>
+                </div>
+                <p id="username-check-result"></p>
+                <input type="password" id="signup-password" placeholder="비밀번호" required>
+                <input type="password" id="signup-password-confirm" placeholder="비밀번호 확인" required>
+                <p id="password-check-result"></p>
+                <input type="text" id="signup-name" placeholder="이름" required>
+                <input type="email" id="signup-email" placeholder="인증 메일 주소" required>
+                <input type="date" id="signup-birth-date" required>
+                <select id="signup-gender" required>
+                    <option value="" disabled selected>성별</option>
+                    <option value="male">남성</option>
+                    <option value="female">여성</option>
+                </select>
+                <select id="signup-preferred-gender" required>
+                    <option value="" disabled selected>선호하는 성별</option>
+                    <option value="male">남성</option>
+                    <option value="female">여성</option>
+                    <option value="both">모두</option>
+                </select>
+                <input type="number" id="signup-min-age" placeholder="선호 최소 연령" required>
+                <input type="number" id="signup-max-age" placeholder="선호 최대 연령" required>
+                <input type="text" id="signup-university" placeholder="대학교" required>
+                <input type="text" id="signup-major" placeholder="전공" required>
+                <input type="number" id="signup-grade" placeholder="학년" required>
+                <button type="submit">가입하기</button>
+            </form>
+            <p class="switch-link" id="go-to-login">이미 계정이 있으신가요? 로그인</p>
+        </div>
+        
+        <div id="result">
+            <p>서버 응답 결과가 여기에 표시됩니다.</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:8000/api/users';
+        const loginPage = document.getElementById('login-page');
+        const signupPage = document.getElementById('signup-page');
+        const goToSignupLink = document.getElementById('go-to-signup');
+        const goToLoginLink = document.getElementById('go-to-login');
+        const resultDiv = document.getElementById('result');
+
+        goToSignupLink.addEventListener('click', () => {
+            loginPage.classList.add('hidden');
+            signupPage.classList.remove('hidden');
+            document.title = '회원가입';
+        });
+
+        goToLoginLink.addEventListener('click', () => {
+            signupPage.classList.add('hidden');
+            loginPage.classList.remove('hidden');
+            document.title = '로그인';
+        });
+
+        const usernameInput = document.getElementById('signup-username');
+        const checkUsernameBtn = document.getElementById('check-username-button');
+        const usernameCheckResult = document.getElementById('username-check-result');
+
+        checkUsernameBtn.addEventListener('click', async () => {
+            const username = usernameInput.value;
+            if (!username) {
+                usernameCheckResult.textContent = '아이디를 입력해주세요.';
+                usernameCheckResult.className = 'error';
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE_URL}/check-username?username=${username}`);
+                const data = await response.json();
+                if (data.is_available) {
+                    usernameCheckResult.textContent = '사용 가능한 아이디입니다.';
+                    usernameCheckResult.className = 'success';
+                } else {
+                    usernameCheckResult.textContent = '이미 사용 중인 아이디입니다.';
+                    usernameCheckResult.className = 'error';
+                }
+            } catch (error) {
+                usernameCheckResult.textContent = '확인 중 오류가 발생했습니다.';
+                usernameCheckResult.className = 'error';
+            }
+        });
+
+        const passwordInput = document.getElementById('signup-password');
+        const passwordConfirmInput = document.getElementById('signup-password-confirm');
+        const passwordCheckResult = document.getElementById('password-check-result');
+
+        function checkPasswords() {
+            const password = passwordInput.value;
+            const passwordConfirm = passwordConfirmInput.value;
+            if (passwordConfirm === "" && password === "") {
+                passwordCheckResult.textContent = '';
+                return;
+            }
+            if (password === passwordConfirm) {
+                passwordCheckResult.textContent = '비밀번호가 일치합니다.';
+                passwordCheckResult.className = 'success';
+            } else {
+                passwordCheckResult.textContent = '비밀번호가 일치하지 않습니다.';
+                passwordCheckResult.className = 'error';
+            }
+        }
+        passwordInput.addEventListener('input', checkPasswords);
+        passwordConfirmInput.addEventListener('input', checkPasswords);
+        
+        document.getElementById('signup-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const signupData = {
+                username: document.getElementById('signup-username').value,
+                password: document.getElementById('signup-password').value,
+                password_confirm: document.getElementById('signup-password-confirm').value,
+                name: document.getElementById('signup-name').value,
+                email: document.getElementById('signup-email').value,
+                birth_date: document.getElementById('signup-birth-date').value,
+                gender: document.getElementById('signup-gender').value,
+                preferred_gender: document.getElementById('signup-preferred-gender').value,
+                min_age_preference: parseInt(document.getElementById('signup-min-age').value),
+                max_age_preference: parseInt(document.getElementById('signup-max-age').value),
+                university: document.getElementById('signup-university').value,
+                major: document.getElementById('signup-major').value,
+                grade: parseInt(document.getElementById('signup-grade').value),
+            };
+            try {
+                const response = await fetch(`${API_BASE_URL}/signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(signupData)
+                });
+                const data = await response.json();
+                resultDiv.innerHTML = `<p><strong>상태 코드:</strong> ${response.status}</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                if (response.status === 201) {
+                    alert('인증 메일이 발송되었습니다. 메일을 확인해주세요!');
+                    goToLoginLink.click();
+                }
+            } catch (error) {
+                resultDiv.textContent = `오류 발생: ${error.message}`;
+            }
+        });
+
+        document.getElementById('login-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const loginData = {
+                username: document.getElementById('login-username').value,
+                password: document.getElementById('login-password').value
+            };
+            try {
+                const response = await fetch(`${API_BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(loginData)
+                });
+                const data = await response.json();
+                resultDiv.innerHTML = `<p><strong>상태 코드:</strong> ${response.status}</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                if (response.ok && data.access_token) {
+                    localStorage.setItem('accessToken', data.access_token);
+                    window.location.href = 'main.html';
+                }
+            } catch (error) {
+                resultDiv.textContent = `오류 발생: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>

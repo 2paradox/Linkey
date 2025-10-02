@@ -1,0 +1,42 @@
+### 1. User Signup Test (회원가입)
+POST http://127.0.0.1:8000/api/users/signup
+Content-Type: application/json
+
+{
+    "username": "kim_test",
+    "password": "1q2w3e4r!",
+    "password_confirm": "1q2w3e4r!",
+    "name": "테스트",
+    "email": "testuser1@gmail.com",
+    "birth_date": "1998-01-15",
+    "gender": "male",
+    "preferred_gender": "female",
+    "min_age_preference": 22,
+    "max_age_preference": 28,
+    "university": "Seoul National University",
+    "major": "Computer Science",
+    "grade": 3
+}
+
+### 2. Check Username Availability (아이디 중복 확인)
+GET http://127.0.0.1:8000/api/users/check-username?username=testuser1
+
+
+### 3. User Login Test (로그인)
+POST http://127.0.0.1:8000/api/users/login
+Content-Type: application/json
+
+{
+    "username": "kim_test",
+    "password": "1q2w3e4r!"
+}
+
+
+### 4. Get My Info (내 정보 보기 - 로그인 필요)
+GET http://127.0.0.1:8000/api/users/me
+Authorization: Bearer <your_access_token_here>
+
+
+### 5. Get User Recommendations (매칭 상대 추천받기 - 로그인 필요)
+GET http://127.0.0.1:8000/api/users/recommendations
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzU5MzI3OTk3LCJpYXQiOjE3NTkzMjc2OTcsImp0aSI6IjJmOGMxYTg5MjU4MzRkZDc4NTEwZTMyMjA4NzdhN2QzIiwidXNlcl9pZCI6IjM4In0.IrOdcIxGRh1HGtbuTzxQu9t9Ms-64Mkp5fElJOUcS5I
