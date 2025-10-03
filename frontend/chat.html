@@ -103,11 +103,31 @@
             };
 
             messageSubmit.onclick = function(e) {
-                const message = messageInput.value;
-                if (message.trim() === '') return;
-                chatSocket.send(JSON.stringify({ 'message': message }));
+            console.log("--- 🕵️ 보내기 버튼 클릭됨 ---");
+            const message = messageInput.value;
+
+            // 1. WebSocket의 현재 상태를 확인합니다.
+            // (1: OPEN, 3: CLOSED)
+            console.log(" - 현재 WebSocket 상태:", chatSocket.readyState);
+
+            if (message.trim() === '') {
+                console.log(" - 메시지가 비어있어 전송하지 않음");
+                return;
+            }
+
+            // 2. 연결이 열려있는 상태(OPEN)일 때만 메시지를 보냅니다.
+            if (chatSocket.readyState === WebSocket.OPEN) { // WebSocket.OPEN은 숫자 1입니다.
+                console.log(" - 연결이 열려있어 메시지 전송 시도:", message);
+                chatSocket.send(JSON.stringify({
+                    'message': message
+                }));
                 messageInput.value = '';
-            };
+                console.log(" - 메시지 전송 시도 완료");
+            } else {
+                console.log(" - WebSocket이 열려있지 않아 메시지를 전송할 수 없음!");
+                alert("서버와 연결이 끊어졌습니다. 페이지를 새로고침 해주세요.");
+            }
+        };
         }
 
         // 페이지가 로드되면 채팅 초기화 함수 실행

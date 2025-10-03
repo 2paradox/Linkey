@@ -274,32 +274,23 @@ def recommend_users(request):
 @login_required
 def get_chat_list(request):
     user = request.user
-    print(f"--- 🕵️  채팅 목록 조회 시작: 현재 사용자 = {user.username} (ID: {user.id}) ---")
-
-    # 1. 내가 메시지를 보낸 상대방들의 ID 목록
-    sent_to_ids = list(ChatMessage.objects.filter(sender=user).values_list('receiver_id', flat=True))
-    print(f"   - 내가 메시지를 보낸 상대 ID 목록: {sent_to_ids}")
     
-    # 2. 나에게 메시지를 보낸 상대방들의 ID 목록
-    received_from_ids = list(ChatMessage.objects.filter(receiver=user).values_list('sender_id', flat=True))
-    print(f"   - 나에게 메시지를 보낸 상대 ID 목록: {received_from_ids}")
-    
-    # 3. 두 목록을 합쳐서 중복 없는 최종 상대방 ID 목록을 만듦
-    partner_ids = set(sent_to_ids + received_from_ids)
-    print(f"   - >> 최종 대화 상대 ID 목록 (중복 제거): {partner_ids}")
+    # ... (partner_ids를 찾는 로직은 이전과 동일) ...
+    sent_to_ids = ChatMessage.objects.filter(sender=user).values_list('receiver_id', flat=True)
+    received_from_ids = ChatMessage.objects.filter(receiver=user).values_list('sender_id', flat=True)
+    partner_ids = set(list(sent_to_ids) + list(received_from_ids))
 
     chat_list = []
-    if not partner_ids:
-        print("   - 대화 상대를 찾지 못하여 빈 목록을 반환합니다.")
-    
     for partner_id in partner_ids:
-        print(f"   - 파트너 ID {partner_id}의 마지막 메시지 찾는 중...")
         try:
             partner = User.objects.get(id=partner_id)
             
-            last_message = ChatMessage.objects.filter(
+            last_message_obj = ChatMessage.objects.filter(
                 (Q(sender=user, receiver=partner) | Q(sender=partner, receiver=user))
             ).latest('timestamp')
+
+            unread_count = ChatMessage.objects.filter(sender=partner, receiver=user, is_read=False).count()
+            print(f"   - 🕵️ 파트너 {partner.id}가 보낸 안 읽은 메시지 개수: {unread_count}")
 
             chat_list.append({
                 'partner': {
@@ -307,16 +298,14 @@ def get_chat_list(request):
                     'username': partner.username,
                     'name': partner.first_name,
                 },
-                'last_message': last_message.content,
-                'timestamp': last_message.timestamp.isoformat()
+                'last_message': last_message_obj.content,
+                'timestamp': last_message_obj.timestamp.isoformat(),
+                'unread_count': unread_count # 응답에 안 읽은 개수 추가
             })
-            print(f"   - 파트너 ID {partner_id} 처리 완료.")
         except (User.DoesNotExist, ChatMessage.DoesNotExist):
-            print(f"   - 파트너 ID {partner_id} 처리 중 오류 발생, 건너뜁니다.")
             continue
 
     chat_list.sort(key=lambda x: x['timestamp'], reverse=True)
-    print(f"--- 🕵️  채팅 목록 조회 완료: {len(chat_list)}개의 대화 발견 ---")
 
     return JsonResponse({'results': chat_list})
 

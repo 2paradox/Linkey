@@ -14,7 +14,10 @@
         .chat-info { flex-grow: 1; }
         .chat-partner { font-weight: bold; margin: 0 0 5px; }
         .last-message { color: #666; font-size: 14px; margin: 0; }
-        .timestamp { font-size: 12px; color: #999; }
+        .chat-meta { display: flex; flex-direction: column; align-items: flex-end; }
+        .timestamp { font-size: 12px; color: #999; margin-bottom: 5px; }
+        /* --- 👇 안 읽은 메시지 배지 스타일 추가 👇 --- */
+        .unread-badge { background-color: #ff4d4d; color: white; font-size: 12px; font-weight: bold; border-radius: 50%; width: 22px; height: 22px; display: flex; justify-content: center; align-items: center; }
     </style>
 </head>
 <body>
@@ -59,17 +62,26 @@
                     chatItem.className = 'chat-item';
                     chatItem.href = `/chat/${chat.partner.id}/`;
                     
-                    // 타임스탬프 포맷팅 (간단하게 날짜만)
                     const date = new Date(chat.timestamp);
                     const formattedDate = date.toLocaleDateString('ko-KR');
+
+                    // --- 👇 안 읽은 개수에 따라 배지를 동적으로 추가 👇 ---
+                    let unreadHtml = '';
+                    if (chat.unread_count > 0) {
+                        unreadHtml = `<div class="unread-badge">${chat.unread_count}</div>`;
+                    }
 
                     chatItem.innerHTML = `
                         <div class="chat-info">
                             <p class="chat-partner">${chat.partner.name} (${chat.partner.username})</p>
                             <p class="last-message">${chat.last_message}</p>
                         </div>
-                        <div class="timestamp">${formattedDate}</div>
+                        <div class="chat-meta">
+                            <div class="timestamp">${formattedDate}</div>
+                            ${unreadHtml}
+                        </div>
                     `;
+                    // --- ---
                     chatListContainer.appendChild(chatItem);
                 });
 
