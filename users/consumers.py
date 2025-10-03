@@ -1,49 +1,81 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.db import database_sync_to_async
+from django.contrib.auth.models import User
+from .models import ChatMessage
+from django.db.models import Q
 
 class ChatConsumer(AsyncWebsocketConsumer):
-    # WebSocket 연결이 처음 맺어질 때 실행
     async def connect(self):
-        # URL 경로에서 'room_name'을 가져옴 (예: /ws/chat/room123/ -> room123)
-        self.room_name = self.scope['url_route']['kwargs']['room_name']
+        # 두 사용자의 ID를 기반으로 고유한 채팅방 이름을 생성 (ID가 낮은 순으로)
+        user1_id = self.scope['user'].id
+        user2_id = int(self.scope['url_route']['kwargs']['user2_id'])
+        if user1_id > user2_id:
+            user1_id, user2_id = user2_id, user1_id
+        self.room_name = f'{user1_id}_{user2_id}'
         self.room_group_name = f'chat_{self.room_name}'
 
-        # 채팅 그룹(채널)에 현재 사용자를 추가
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
         )
-
-        # WebSocket 연결을 수락
         await self.accept()
 
-    # WebSocket 연결이 끊어질 때 실행
+        # --- 과거 메시지 불러와서 전송하는 로직 추가 ---
+        messages = await self.get_messages()
+        for message in messages:
+            await self.send(text_data=json.dumps({
+                'message': message['content'],
+                'sender_username': message['sender__username']
+            }))
+
     async def disconnect(self, close_code):
-        # 채팅 그룹(채널)에서 현재 사용자를 제거
         await self.channel_layer.group_discard(
             self.room_group_name,
             self.channel_name
         )
 
-    # 클라이언트로부터 메시지를 받았을 때 실행
     async def receive(self, text_data):
         text_data_json = json.loads(text_data)
         message = text_data_json['message']
+        sender = self.scope['user']
+        receiver_id = int(self.scope['url_route']['kwargs']['user2_id'])
 
-        # 채팅 그룹(채널)에 있는 모든 사람에게 메시지를 다시 보냄 (broadcast)
+        # 데이터베이스에 메시지 저장
+        await self.save_message(sender, receiver_id, message)
+
         await self.channel_layer.group_send(
             self.room_group_name,
             {
-                'type': 'chat_message', # group_send를 받아서 실행할 함수 이름
-                'message': message
+                'type': 'chat_message',
+                'message': message,
+                'sender_username': sender.username
             }
         )
 
-    # 위 group_send에서 메시지를 받았을 때, 각 클라이언트가 실행할 함수
     async def chat_message(self, event):
         message = event['message']
+        sender_username = event['sender_username']
 
-        # WebSocket을 통해 클라이언트에게 메시지를 JSON 형식으로 보냄
         await self.send(text_data=json.dumps({
-            'message': message
+            'message': message,
+            'sender_username': sender_username
         }))
+
+    # 데이터베이스에 메시지를 저장하는 비동기 함수
+    @database_sync_to_async
+    def save_message(self, sender, receiver_id, message):
+        receiver = User.objects.get(id=receiver_id)
+        ChatMessage.objects.create(
+            sender=sender,
+            receiver=receiver,
+            content=message
+        )
+
+    @database_sync_to_async
+    def get_messages(self):
+        messages = ChatMessage.objects.filter(
+            Q(sender=self.scope['user'], receiver_id=self.scope['url_route']['kwargs']['user2_id']) |
+            Q(sender_id=self.scope['url_route']['kwargs']['user2_id'], receiver=self.scope['user'])
+        ).order_by('timestamp').values('content', 'sender__username')
+        return list(messages)

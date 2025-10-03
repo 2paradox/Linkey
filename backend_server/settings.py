@@ -49,7 +49,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -146,3 +146,14 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5500", # VS Code Live Server의 기본 주소
     "http://localhost:5500",
 ]
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("redis", 6379)], # <-- '127.0.0.1'을 'redis'로 변경
+        },
+    },
+}
+
+STATIC_ROOT = BASE_DIR / "staticfiles"

@@ -17,13 +17,17 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.urls import path, include
-from users.views import home, main_page # home과 main_page 함수를 가져옵니다.
+from users.views import home, main_page, chat_room  # home과 main_page 함수를 가져옵니다.
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 
 urlpatterns = [
     path('', home, name='home'), # 1. 메인 페이지 (로그인 화면)
     path('main/', main_page, name='main'), # 2. 로그인 후 페이지
+    path('chat/<int:user2_id>/', chat_room, name='chat_room'),
     path('admin/', admin.site.urls), # 3. 관리자 페이지
     path('api/users/', include('users.urls')), # 4. 모든 User 관련 API
     path('admin/', admin.site.urls),
     path('api/users/', include('users.urls')),
 ]
+
+urlpatterns += staticfiles_urlpatterns()

@@ -27,7 +27,7 @@ POST http://127.0.0.1:8000/api/users/login
 Content-Type: application/json
 
 {
-    "username": "kim_test",
+    "username": "lee_test",
     "password": "1q2w3e4r!"
 }
 
@@ -40,3 +40,7 @@ Authorization: Bearer <your_access_token_here>
 ### 5. Get User Recommendations (매칭 상대 추천받기 - 로그인 필요)
 GET http://127.0.0.1:8000/api/users/recommendations
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzU5MzI3OTk3LCJpYXQiOjE3NTkzMjc2OTcsImp0aSI6IjJmOGMxYTg5MjU4MzRkZDc4NTEwZTMyMjA4NzdhN2QzIiwidXNlcl9pZCI6IjM4In0.IrOdcIxGRh1HGtbuTzxQu9t9Ms-64Mkp5fElJOUcS5I
+
+### 6. Like a User (좋아요 누르기 - 로그인 필요)
+POST http://127.0.0.1:8000/api/users/38/like/
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzU5NDI5ODUzLCJpYXQiOjE3NTk0Mjk1NTMsImp0aSI6IjIwOGMyY2M4ZmQyOTQ5ZTdiODQ4NDNhOTlhM2E1OGFlIiwidXNlcl9pZCI6IjM5In0.H1d1G9deNmUdYpbQMZJXFK8J1UZctbcTJgc-25__yGc

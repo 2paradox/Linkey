@@ -37,3 +37,25 @@ class Profile(models.Model):
     grade = models.PositiveIntegerField(null=True, blank=True)
     def __str__(self):
         return self.user.username
+
+class ChatMessage(models.Model):
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_messages')
+    content = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f'From {self.sender.username} to {self.receiver.username}: {self.content[:20]}'
+
+class Like(models.Model):
+    from_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='likes_sent')
+    to_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='likes_received')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # 한 사람이 다른 사람에게 여러 번 '좋아요'를 누를 수 없도록 제약 조건 추가
+    class Meta:
+        unique_together = ('from_user', 'to_user')
+
+    def __str__(self):
+        return f'{self.from_user.username} likes {self.to_user.username}'

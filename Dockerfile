@@ -15,3 +15,6 @@ RUN pip install -r requirements.txt
 
 # 6. 현재 폴더의 모든 파일을 컨테이너의 /app 폴더로 복사합니다.
 COPY . .
+
+# 7. 정적 파일들을 한 곳으로 모으는 collectstatic 명령어를 실행합니다.
+RUN python manage.py collectstatic --no-input

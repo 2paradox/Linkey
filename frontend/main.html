@@ -10,11 +10,14 @@
         .header h2 { margin: 0; font-size: 20px; }
         .header button { padding: 8px 15px; font-size: 14px; font-weight: bold; cursor: pointer; background: #dc3545; color: white; border: none; border-radius: 8px; }
         .container { max-width: 800px; margin: 30px auto; padding: 20px; }
-        #user-info { text-align: center; margin-bottom: 30px; font-size: 18px; }
-        #recommendation-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
-        .card { background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); padding: 20px; text-align: center; }
+        h2.section-title { border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
+        #recommendation-list, #likes-received-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-bottom: 40px; }
+        .card { background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); padding: 20px; text-align: center; display: flex; flex-direction: column; justify-content: space-between; min-height: 150px; }
         .card h3 { margin-top: 0; margin-bottom: 10px; font-size: 18px; }
         .card p { margin: 5px 0; color: #666; font-size: 14px; }
+        .like-button, .chat-button { width: 100%; padding: 10px; margin-top: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
+        .like-button { background-color: #ff4d4d; color: white; }
+        .chat-button { background-color: #007bff; color: white; text-decoration: none; display: inline-block; box-sizing: border-box; }
     </style>
 </head>
 <body>
@@ -24,84 +27,136 @@
     </header>
 
     <main class="container">
-        <div id="recommendation-list">
-            </div>
+        <h2 class="section-title">👀 나를 좋아한 사람</h2>
+        <div id="likes-received-list"></div>
+
+        <h2 class="section-title">💖 추천 상대</h2>
+        <div id="recommendation-list"></div>
     </main>
 
     <script>
-        const API_BASE_URL = '/api/users';
-        const userInfoDiv = document.getElementById('user-info');
-        const logoutButton = document.getElementById('logout-button');
-        const recommendationListDiv = document.getElementById('recommendation-list');
-
-        // 페이지 로드 시 실행
         window.addEventListener('load', async () => {
+            const API_BASE_URL = '/api/users';
+            const userInfoDiv = document.getElementById('user-info');
+            const logoutButton = document.getElementById('logout-button');
+            const recommendationListDiv = document.getElementById('recommendation-list');
+            const likesReceivedListDiv = document.getElementById('likes-received-list');
             const token = localStorage.getItem('accessToken');
+
+            async function handleLikeClick(event) {
+                if (event.target && event.target.classList.contains('like-button')) {
+                    const button = event.target;
+                    const userId = button.dataset.userId;
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/${userId}/like/`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        const data = await response.json();
+                        if (data.status === 'mutual') {
+                            button.textContent = '채팅하기 💬';
+                            button.classList.remove('like-button');
+                            button.classList.add('chat-button');
+                            button.onclick = () => { window.location.href = `/chat/${userId}/`; };
+                            alert('매칭 성공! 이제 채팅할 수 있습니다.');
+                        } else if (data.status === 'liked' || data.status === 'already_liked') {
+                            button.textContent = '요청 보냄 ✅';
+                            button.disabled = true;
+                            button.style.backgroundColor = '#6c757d';
+                        }
+                    } catch (error) {
+                        console.error('좋아요 처리 오류:', error);
+                        alert('오류가 발생했습니다.');
+                    }
+                }
+            }
+
+            async function loadLikesReceived(token) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/likes-received/`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await response.json();
+                    renderUserCards(data.results, likesReceivedListDiv);
+                } catch (error) {
+                    console.error('받은 좋아요 목록 로딩 오류:', error);
+                }
+            }
+
+            async function loadRecommendations(token) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/recommendations`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await response.json();
+                    renderUserCards(data.results, recommendationListDiv);
+                } catch (error) {
+                    console.error('추천 목록 로딩 오류:', error);
+                }
+            }
+            
+            function renderUserCards(users, container) {
+            container.innerHTML = '';
+                if (users.length === 0) {
+                    container.innerHTML = '<p>해당하는 사용자가 없습니다.</p>';
+                    return;
+                }
+                users.forEach(user => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+
+                    let buttonHtml = '';
+                    // 서버에서 받은 like_status에 따라 다른 버튼을 생성
+                    if (user.like_status === 'mutual') {
+                        buttonHtml = `<a href="/chat/${user.id}/" class="chat-button">채팅하기 💬</a>`;
+                    } else if (user.like_status === 'i_liked_them') {
+                        buttonHtml = `<button class="like-button" disabled style="background-color: #6c757d;">요청 보냄 ✅</button>`;
+                    } else { // 'they_liked_me' 또는 'none'
+                        buttonHtml = `<button class="like-button" data-user-id="${user.id}">좋아요 ❤️</button>`;
+                    }
+
+                    card.innerHTML = `
+                        <div>
+                            <h3>${user.name} (${user.username})</h3>
+                            <p>${user.major}</p>
+                            <p>${user.grade}학년</p>
+                        </div>
+                        ${buttonHtml}
+                    `;
+                    container.appendChild(card);
+                });
+            }
+
+            likesReceivedListDiv.addEventListener('click', handleLikeClick);
+            recommendationListDiv.addEventListener('click', handleLikeClick);
+            logoutButton.addEventListener('click', () => {
+                localStorage.removeItem('accessToken');
+                alert('로그아웃되었습니다.');
+                window.location.href = '/';
+            });
 
             if (!token) {
                 alert('로그인이 필요합니다.');
-                window.location.href = 'index.html';
+                window.location.href = '/';
                 return;
             }
-
-            // 1. 내 정보 불러오기
             try {
                 const response = await fetch(`${API_BASE_URL}/me`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                if (!response.ok) throw new Error('Failed to fetch user info');
+                
+                const myInfo = await response.json();
+                userInfoDiv.textContent = `${myInfo.username}님, 환영합니다!`;
 
-                if (response.ok) {
-                    const data = await response.json();
-                    userInfoDiv.textContent = `${data.username}님, 환영합니다!`;
-                    // 2. 내 정보 로딩 성공 후, 추천 목록 불러오기
-                    loadRecommendations(token);
-                } else {
-                    throw new Error('세션 만료');
-                }
+                loadLikesReceived(token);
+                loadRecommendations(token);
             } catch (error) {
-                alert('세션이 만료되었거나 오류가 발생했습니다. 다시 로그인해주세요.');
+                console.error('Failed to initialize page:', error);
+                alert('사용자 정보를 불러오는 데 실패했습니다. 다시 로그인해주세요.');
                 localStorage.removeItem('accessToken');
-                window.location.href = 'index.html';
+                window.location.href = '/';
             }
-        });
-
-        // 추천 목록 불러오는 함수
-        async function loadRecommendations(token) {
-            try {
-                const response = await fetch(`${API_BASE_URL}/recommendations`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await response.json();
-
-                recommendationListDiv.innerHTML = ''; // 기존 목록 비우기
-
-                if (data.results.length === 0) {
-                    recommendationListDiv.innerHTML = '<p>매칭 상대를 찾을 수 없습니다. 선호 조건을 변경해보세요!</p>';
-                    return;
-                }
-
-                data.results.forEach(user => {
-                    const card = document.createElement('div');
-                    card.className = 'card';
-                    card.innerHTML = `
-                        <h3>${user.name} (${user.username})</h3>
-                        <p>${user.major}</p>
-                        <p>${user.grade}학년</p>
-                    `;
-                    recommendationListDiv.appendChild(card);
-                });
-
-            } catch (error) {
-                console.error('추천 목록 로딩 오류:', error);
-                recommendationListDiv.innerHTML = '<p>추천 상대를 불러오는 데 실패했습니다.</p>';
-            }
-        }
-
-        // 로그아웃 버튼
-        logoutButton.addEventListener('click', () => {
-            localStorage.removeItem('accessToken');
-            alert('로그아웃되었습니다.');
-            window.location.href = 'index.html';
         });
     </script>
 </body>

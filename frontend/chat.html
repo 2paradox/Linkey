@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>채팅</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; margin: 0; background-color: #f4f7f6; }
+        .chat-container { max-width: 600px; margin: 50px auto; background-color: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; height: 80vh; }
+        .chat-log { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
+        .message { display: flex; flex-direction: column; margin-bottom: 15px; max-width: 80%; }
+        .message.sent { align-self: flex-end; align-items: flex-end; }
+        .message.received { align-self: flex-start; align-items: flex-start; }
+        .message-content { display: inline-block; padding: 10px 15px; border-radius: 20px; text-align: left; }
+        .message.sent .message-content { background-color: #007bff; color: white; }
+        .message.received .message-content { background-color: #e9e9eb; }
+        .sender-name { font-size: 12px; color: #666; margin: 0 8px 4px; }
+        .chat-input { display: flex; padding: 20px; border-top: 1px solid #ddd; }
+        #chat-message-input { flex-grow: 1; border: 1px solid #ccc; border-radius: 20px; padding: 10px 15px; font-size: 16px; }
+        #chat-message-submit { background-color: #007bff; color: white; border: none; border-radius: 50%; width: 45px; height: 45px; font-size: 20px; margin-left: 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div id="chat-log" class="chat-log"></div>
+        <div class="chat-input">
+            <input id="chat-message-input" type="text" autocomplete="off">
+            <button id="chat-message-submit">➤</button>
+        </div>
+    </div>
+
+    {{ user2_id|json_script:"user2_id" }}
+
+    <script>
+        const user2_id = JSON.parse(document.getElementById('user2_id').textContent);
+        const chatLog = document.getElementById('chat-log');
+        const messageInput = document.getElementById('chat-message-input');
+        const messageSubmit = document.getElementById('chat-message-submit');
+        const token = localStorage.getItem('accessToken');
+        
+        let my_username = ''; // 나중에 채워질 내 아이디 변수
+
+        // --- 로직 전체 재구성 ---
+        async function initializeChat() {
+            // 1. 토큰이 없으면 로그인 페이지로
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/';
+                return;
+            }
+
+            // 2. /api/users/me API를 호출해서 내 정보를 가져옴
+            try {
+                const response = await fetch('/api/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Failed to fetch user info');
+                
+                const myInfo = await response.json();
+                my_username = myInfo.username; // 내 아이디를 변수에 저장
+
+                // 3. 내 정보 로딩 성공 후, WebSocket 연결 시작
+                setupWebSocket();
+
+            } catch (error) {
+                console.error('Failed to initialize chat:', error);
+                alert('사용자 정보를 불러오는 데 실패했습니다. 다시 로그인해주세요.');
+                window.location.href = '/';
+            }
+        }
+
+        function setupWebSocket() {
+            const chatSocket = new WebSocket(
+                'ws://' + window.location.host + '/ws/chat/' + user2_id + '/?token=' + token
+            );
+
+            chatSocket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                const messageElement = document.createElement('div');
+                
+                messageElement.classList.add('message');
+                if (data.sender_username === my_username) { // 이제 my_username 변수는 정확한 값을 가짐
+                    messageElement.classList.add('sent');
+                } else {
+                    messageElement.classList.add('received');
+                }
+                
+                messageElement.innerHTML = `
+                    <div class="sender-name">${data.sender_username}</div>
+                    <div class="message-content">${data.message}</div>
+                `;
+                chatLog.appendChild(messageElement);
+                chatLog.scrollTop = chatLog.scrollHeight;
+            };
+
+            chatSocket.onclose = function(e) {
+                console.error('Chat socket closed unexpectedly');
+            };
+
+            messageInput.focus();
+            messageInput.onkeyup = function(e) {
+                if (e.key === 'Enter') { messageSubmit.click(); }
+            };
+
+            messageSubmit.onclick = function(e) {
+                const message = messageInput.value;
+                if (message.trim() === '') return;
+                chatSocket.send(JSON.stringify({ 'message': message }));
+                messageInput.value = '';
+            };
+        }
+
+        // 페이지가 로드되면 채팅 초기화 함수 실행
+        window.addEventListener('load', initializeChat);
+    </script>
+</body>
+</html>

@@ -1,27 +1,24 @@
-from django.shortcuts import render
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.models import User
-from .models import Profile
-from django.contrib.auth import authenticate
-from rest_framework_simplejwt.tokens import RefreshToken
-from .decorators import login_required
-from django.core.mail import send_mail
-from django.utils.http import urlsafe_base64_decode
-from django.utils.encoding import force_str
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
-from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.utils import timezone
-from datetime import timedelta
-from datetime import date
-from datetime import date
-from django.db.models import Q
-from .decorators import login_required
-from django.db.models.functions import ExtractYear
-from django.shortcuts import render
+# users/views.py (최종 수정본)
 
 import json
+from datetime import date, timedelta
+
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.core.mail import send_mail
+from django.db.models import F, Q
+from django.db.models.functions import ExtractYear
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from .decorators import login_required  # 우리가 만든 토큰 인증용 데코레이터
+from .models import Like, Profile
 
 
 @csrf_exempt
@@ -34,76 +31,48 @@ def signup(request):
             password_confirm = data.get('password_confirm')
             name = data.get('name')
             email = data.get('email')
-            birth_date = data.get('birth_date')
+            birth_date_str = data.get('birth_date')
             gender = data.get('gender')
             preferred_gender = data.get('preferred_gender')
-            min_age_preference = data.get('min_age_preference')
-            max_age_preference = data.get('max_age_preference')
+            age_delta_down = data.get('age_delta_down')
+            age_delta_up = data.get('age_delta_up')
             major = data.get('major')
             grade = data.get('grade')
 
-            if not all([username, password, password_confirm, name, email, birth_date, gender, preferred_gender, min_age_preference, max_age_preference, university, major, grade]):
+            # --- 유효성 검사 ---
+            if not all([username, password, password_confirm, name, email, birth_date_str, gender, preferred_gender, age_delta_down is not None, age_delta_up is not None, major, grade]):
                 return JsonResponse({'message': 'ALL_FIELDS_REQUIRED'}, status=400)
 
             if password != password_confirm:
                 return JsonResponse({'message': 'PASSWORDS_DO_NOT_MATCH'}, status=400)
-            
+
             if User.objects.filter(username=username).exists():
                 return JsonResponse({'message': 'USERNAME_ALREADY_EXISTS'}, status=400)
             
-            # '@' 포함 여부 검사는 여기에 추가하면 더 좋습니다.
             if '@' not in email:
                 return JsonResponse({'message': 'INVALID_EMAIL_FORMAT'}, status=400)
 
+            # --- 이메일 중복 및 유령 계정 처리 ---
             existing_user = User.objects.filter(email=email).first()
             if existing_user:
-                # 1. 이미 존재하는 활성 유저인 경우
                 if existing_user.is_active:
                     return JsonResponse({'message': 'EMAIL_ALREADY_EXISTS'}, status=400)
                 
-                # 2. 5분이 지나지 않은 비활성 유저인 경우
                 time_difference = timezone.now() - existing_user.date_joined
                 if time_difference < timedelta(minutes=5):
                     return JsonResponse({'message': 'VERIFICATION_PENDING_PLEASE_WAIT'}, status=400)
-                
-                # 3. 5분이 지난 비활성 유저(유령 계정)인 경우, 삭제하고 계속 진행
                 else:
                     existing_user.delete()
 
-            ALLOWED_DOMAINS = ["vt.edu", "gmail.com"]
-            domain = email.split('@')[-1]
+            # --- 나이 계산 ---
+            birth_date = date.fromisoformat(birth_date_str)
+            today = date.today()
+            user_age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+            final_min_age = user_age + int(age_delta_down)
+            final_max_age = user_age + int(age_delta_up)
 
-            if domain not in ALLOWED_DOMAINS:
-                return JsonResponse({'message': 'UNAUTHORIZED_EMAIL_DOMAIN'}, status=400)
-
-            try:
-                existing_user = User.objects.get(username=email)
-                
-                # 1. 이미 존재하는 활성 유저인 경우
-                if existing_user.is_active:
-                    return JsonResponse({'message': 'EMAIL_ALREADY_EXISTS'}, status=400)
-                
-                # 2. 비활성 유저인 경우, 생성 시간 확인
-                time_difference = timezone.now() - existing_user.date_joined
-                if time_difference < timedelta(minutes=5):
-                    # 2-1. 5분이 지나지 않았다면, 재가입 방지
-                    return JsonResponse({'message': 'VERIFICATION_PENDING_PLEASE_WAIT'}, status=400)
-                else:
-                    # 2-2. 5분이 지났다면, 기존 비활성 계정 삭제 후 계속 진행
-                    existing_user.delete()
-
-            except User.DoesNotExist:
-                # 사용자가 존재하지 않으면 그냥 통과
-                pass
-
-            
-            # --- 여기서부터 로직 변경 ---
-            user = User(
-                username=username,
-                email=email,
-                first_name=name,
-                is_active=False
-            )
+            # --- 사용자 및 프로필 생성 ---
+            user = User(username=username, email=email, first_name=name, is_active=False)
             user.set_password(password)
             user.save()
 
@@ -112,30 +81,27 @@ def signup(request):
                 birth_date=birth_date,
                 gender=gender,
                 preferred_gender=preferred_gender,
-                age_preference_down=data.get('age_delta_down'),
-                age_preference_up=data.get('age_delta_up'),
-                university=university,
+                age_preference_down=age_delta_down,
+                age_preference_up=age_delta_up,
                 major=major,
                 grade=grade
             )
 
-            # 1. 인증 링크에 포함될 토큰 생성
+            # --- 이메일 발송 ---
             token_generator = PasswordResetTokenGenerator()
             uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
             token = token_generator.make_token(user)
-            verify_url = f'http://127.0.0.1:8000/api/users/verify-email/{uidb64}/{token}'
-
-            # 2. 인증 이메일 발송 (message 부분 수정)
-            subject = '[나의 앱] 회원가입 인증을 완료해주세요.'
+            verify_url = f'http://localhost:8000/api/users/verify-email/{uidb64}/{token}'
+            
+            subject = '[Linkey] 회원가입 인증을 완료해주세요.'
             message = f'회원가입을 완료하려면 다음 링크를 클릭하세요: {verify_url}'
-            from_email = 'noreply@my-app.com'
+            from_email = 'noreply@linkey.com'
             recipient_list = [email]
             send_mail(subject, message, from_email, recipient_list)
-
-            # 3. 성공 응답 메시지 변경
+            
             return JsonResponse({'message': 'VERIFICATION_EMAIL_SENT'}, status=201)
 
-        except Exception as e: # 더 넓은 범위의 예외 처리
+        except Exception as e:
             return JsonResponse({'message': str(e)}, status=400)
 
     return JsonResponse({'message': 'INVALID_METHOD'}, status=405)
@@ -145,18 +111,15 @@ def login(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            username = data.get('username') # 'email' 대신 'username'을 받습니다.
+            username = data.get('username')
             password = data.get('password')
 
             if not username or not password:
                 return JsonResponse({'message': 'USERNAME_AND_PASSWORD_REQUIRED'}, status=400)
 
-            # 장고의 내장 함수 authenticate를 사용해 사용자 인증
-            # username으로 email을 사용했으므로, username 필드에 email 값을 전달합니다.
             user = authenticate(request, username=username, password=password)
 
             if user is not None:
-                # --- 토큰 생성 로직으로 변경 ---
                 if user.is_active:
                     token = RefreshToken.for_user(user)
                     return JsonResponse({
@@ -166,31 +129,16 @@ def login(request):
                 else:
                     return JsonResponse({'message': 'ACCOUNT_NOT_ACTIVATED'}, status=401)
             else:
-                # 인증에 실패했을 경우 (사용자가 없거나, 비밀번호가 틀림)
                 return JsonResponse({'message': 'INVALID_CREDENTIALS'}, status=401)
-
         except json.JSONDecodeError:
             return JsonResponse({'message': 'INVALID_JSON'}, status=400)
-
     return JsonResponse({'message': 'INVALID_METHOD'}, status=405)
-
-@login_required # <-- 데코레이터 적용!
-def get_user_info(request):
-    # 데코레이터가 request.user에 사용자 정보를 넣어줬으므로 바로 사용 가능
-    user = request.user 
-    return JsonResponse({
-        'id': user.id,
-        'email': user.email,
-        'username': user.username
-    }, status=200)
 
 def verify_email(request, uidb64, token):
     try:
-        # 1. uidb64를 디코딩해서 사용자 ID를 얻음
         uid = force_str(urlsafe_base64_decode(uidb64))
         user = User.objects.get(pk=uid)
         
-        # 2. 토큰이 유효한지 확인
         token_generator = PasswordResetTokenGenerator()
         if token_generator.check_token(user, token):
             user.is_active = True
@@ -198,71 +146,128 @@ def verify_email(request, uidb64, token):
             return JsonResponse({'message': 'SUCCESS_EMAIL_VERIFIED'}, status=200)
         
         return JsonResponse({'message': 'INVALID_TOKEN'}, status=400)
-
     except(TypeError, ValueError, OverflowError, User.DoesNotExist):
         return JsonResponse({'message': 'INVALID_USER'}, status=400)
 
 def check_username(request):
-    # GET 요청의 쿼리 파라미터에서 username을 가져옵니다.
     username = request.GET.get('username', None)
-    if username is None:
+    if not username:
         return JsonResponse({'message': 'USERNAME_REQUIRED'}, status=400)
-
     is_taken = User.objects.filter(username=username).exists()
-    
-    # is_taken이 True이면 (이미 존재하면) is_available은 False가 됩니다.
     return JsonResponse({'is_available': not is_taken})
 
-@login_required
-def recommend_users(request):
+@login_required # 토큰 인증용 데코레이터 사용
+def get_user_info(request):
     user = request.user
-    profile = user.profile
-    today = date.today()
+    return JsonResponse({
+        'id': user.id,
+        'username': user.username,
+        'email': user.email
+    }, status=200)
 
-    # 1. 모든 사용자의 '나이'를 실시간으로 계산하여 주석(annotate)으로 추가
-    #    이렇게 하면 데이터베이스 단에서 효율적으로 나이를 비교할 수 있습니다.
-    users_with_age = User.objects.annotate(
-        birth_year=ExtractYear('profile__birth_date')
-    ).annotate(
-        age=today.year - ExtractYear('profile__birth_date')
-    )
+@login_required # 토큰 인증용 데코레이터 사용
+def get_likes_received(request):
+    likes_received = Like.objects.filter(to_user=request.user)
+    users_who_liked_me = [like.from_user for like in likes_received]
 
-    # 2. 현재 로그인한 유저의 나이와 선호도
-    my_age = users_with_age.get(id=user.id).age
-    my_pref_min_age = my_age + profile.age_preference_down
-    my_pref_max_age = my_age + profile.age_preference_up
-
-    # 3. 필터링
-    # - 기본 조건: 나 자신 제외, 같은 대학, 활성 계정
-    base_filter = ~Q(id=user.id) & Q(is_active=True)
-    
-    # - 나의 선호도 조건: 상대방의 나이가 나의 선호 범위에 있어야 함
-    my_preference_filter = Q(age__gte=my_pref_min_age) & Q(age__lte=my_pref_max_age)
-    if profile.preferred_gender != 'both':
-        my_preference_filter &= Q(profile__gender=profile.preferred_gender)
-
-    # - 상대방의 선호도 조건 (상호 매칭)
-    #   (상대방의 나이 + 상대방의 아래 나이차 <= 나의 나이 <= 상대방의 나이 + 상대방의 위 나이차)
-    #   이 부분은 복잡한 F() 표현식을 사용합니다.
-    from django.db.models import F
-    mutual_filter = Q(profile__age_preference_down__isnull=False) & Q(profile__age_preference_up__isnull=False)
-    mutual_filter &= Q(age__gte=my_age - F('profile__age_preference_up'))
-    mutual_filter &= Q(age__lte=my_age - F('profile__age_preference_down'))
-
-    if profile.gender != 'both':
-         mutual_filter &= (Q(profile__preferred_gender=profile.gender) | Q(profile__preferred_gender='both'))
-
-    # 모든 필터를 합쳐서 최종 쿼리 실행
-    recommended_users = users_with_age.filter(base_filter & my_preference_filter & mutual_filter)
-    
-    # 4. 결과 데이터 가공 (이전과 동일)
-    results = [{'username': r_user.username, 'name': r_user.first_name, 'major': r_user.profile.major, 'grade': r_user.profile.grade} for r_user in recommended_users]
-
+    results = []
+    for user in users_who_liked_me:
+        i_liked = Like.objects.filter(from_user=request.user, to_user=user).exists()
+        status = 'mutual' if i_liked else 'they_liked_me'
+        
+        results.append({
+            'id': user.id,
+            'username': user.username,
+            'name': user.first_name,
+            'major': user.profile.major,
+            'grade': user.profile.grade,
+            'like_status': status
+        })
     return JsonResponse({'results': results})
 
+@csrf_exempt
+@login_required # 토큰 인증용 데코레이터 사용
+def like_user(request, user_id):
+    if request.method == 'POST':
+        to_user = get_object_or_404(User, id=user_id)
+        from_user = request.user
+
+        if from_user == to_user:
+            return JsonResponse({'status': 'error', 'message': 'You cannot like yourself.'}, status=400)
+
+        like, created = Like.objects.get_or_create(from_user=from_user, to_user=to_user)
+
+        if not created:
+            return JsonResponse({'status': 'already_liked'})
+
+        is_mutual = Like.objects.filter(from_user=to_user, to_user=from_user).exists()
+
+        if is_mutual:
+            return JsonResponse({'status': 'mutual'})
+        else:
+            return JsonResponse({'status': 'liked'})
+    
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
+
+@login_required # 토큰 인증용 데코레이터 사용
+def recommend_users(request):
+    try:
+        user = request.user
+        profile = user.profile
+        today = date.today()
+
+        users_with_age = User.objects.annotate(
+            age=today.year - ExtractYear('profile__birth_date')
+        )
+
+        my_age = users_with_age.get(id=user.id).age
+        my_pref_min_age = my_age + profile.age_preference_down
+        my_pref_max_age = my_age + profile.age_preference_up
+
+        base_filter = ~Q(id=user.id) & Q(is_active=True)
+        
+        my_preference_filter = Q(age__gte=my_pref_min_age) & Q(age__lte=my_pref_max_age)
+        if profile.preferred_gender != 'both':
+            my_preference_filter &= Q(profile__gender=profile.preferred_gender)
+
+        mutual_filter = (
+            Q(profile__age_preference_down__isnull=False) &
+            Q(profile__age_preference_up__isnull=False) &
+            Q(age__gte=my_age - F('profile__age_preference_up')) &
+            Q(age__lte=my_age - F('profile__age_preference_down'))
+        )
+        if profile.gender != 'both':
+            mutual_filter &= (Q(profile__preferred_gender=profile.gender) | Q(profile__preferred_gender='both'))
+
+        recommended_users = users_with_age.filter(base_filter & my_preference_filter & mutual_filter)
+        
+        results = []
+        my_likes = Like.objects.filter(from_user=request.user).values_list('to_user_id', flat=True)
+
+        for r_user in recommended_users:
+            status = 'i_liked_them' if r_user.id in my_likes else 'none'
+            results.append({
+                'id': r_user.id,
+                'username': r_user.username,
+                'name': r_user.first_name,
+                'major': r_user.profile.major,
+                'grade': r_user.profile.grade,
+                'like_status': status
+            })
+
+        return JsonResponse({'results': results})
+    except Profile.DoesNotExist:
+        return JsonResponse({'message': 'PROFILE_NOT_FOUND'}, status=404)
+    except Exception as e:
+        return JsonResponse({'message': str(e)}, status=500)
+
+
+# --- HTML 페이지 렌더링을 위한 View들 ---
 def home(request):
     return render(request, 'index.html')
 
-# 메인 페이지를 보여주는 view
 def main_page(request):
     return render(request, 'main.html')
+
+def chat_room(request, user2_id):
+    return render(request, 'chat.html', {'user2_id': user2_id})
