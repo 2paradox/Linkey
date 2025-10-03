@@ -16,9 +16,8 @@ from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework_simplejwt.tokens import RefreshToken
-
 from .decorators import login_required  # 우리가 만든 토큰 인증용 데코레이터
-from .models import Like, Profile
+from .models import Like, Profile, ChatMessage
 
 
 @csrf_exempt
@@ -51,6 +50,13 @@ def signup(request):
             
             if '@' not in email:
                 return JsonResponse({'message': 'INVALID_EMAIL_FORMAT'}, status=400)
+            
+            # --- 이메일 도메인 검사 ---
+            # 실제 서비스에서는 이메일 주소의 도메인 부분을 더 엄격하게 검사해야 합니다.
+            # ALLOWED_DOMAINS = ["vt.edu", "gmail.com"] 
+            # domain = email.split('@')[-1]
+            # if domain not in ALLOWED_DOMAINS:
+            #     return JsonResponse({'message': 'UNAUTHORIZED_EMAIL_DOMAIN'}, status=400)
 
             # --- 이메일 중복 및 유령 계정 처리 ---
             existing_user = User.objects.filter(email=email).first()
@@ -63,14 +69,7 @@ def signup(request):
                     return JsonResponse({'message': 'VERIFICATION_PENDING_PLEASE_WAIT'}, status=400)
                 else:
                     existing_user.delete()
-
-            # --- 나이 계산 ---
-            birth_date = date.fromisoformat(birth_date_str)
-            today = date.today()
-            user_age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
-            final_min_age = user_age + int(age_delta_down)
-            final_max_age = user_age + int(age_delta_up)
-
+            
             # --- 사용자 및 프로필 생성 ---
             user = User(username=username, email=email, first_name=name, is_active=False)
             user.set_password(password)
@@ -78,7 +77,7 @@ def signup(request):
 
             Profile.objects.create(
                 user=user,
-                birth_date=birth_date,
+                birth_date=birth_date_str,
                 gender=gender,
                 preferred_gender=preferred_gender,
                 age_preference_down=age_delta_down,
@@ -91,13 +90,13 @@ def signup(request):
             token_generator = PasswordResetTokenGenerator()
             uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
             token = token_generator.make_token(user)
-            verify_url = f'http://localhost:8000/api/users/verify-email/{uidb64}/{token}'
+            verify_url = f'http://localhost:8000/api/users/verify-email/{uidb64}/{token}' # 로컬 개발 환경 기준
             
             subject = '[Linkey] 회원가입 인증을 완료해주세요.'
             message = f'회원가입을 완료하려면 다음 링크를 클릭하세요: {verify_url}'
-            from_email = 'noreply@linkey.com'
+            # from_email은 settings.py의 EMAIL_HOST_USER와 동일하게 설정됩니다.
             recipient_list = [email]
-            send_mail(subject, message, from_email, recipient_list)
+            send_mail(subject, message, from_email=None, recipient_list=recipient_list)
             
             return JsonResponse({'message': 'VERIFICATION_EMAIL_SENT'}, status=201)
 
@@ -105,6 +104,7 @@ def signup(request):
             return JsonResponse({'message': str(e)}, status=400)
 
     return JsonResponse({'message': 'INVALID_METHOD'}, status=405)
+
 
 @csrf_exempt
 def login(request):
@@ -134,6 +134,7 @@ def login(request):
             return JsonResponse({'message': 'INVALID_JSON'}, status=400)
     return JsonResponse({'message': 'INVALID_METHOD'}, status=405)
 
+
 def verify_email(request, uidb64, token):
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
@@ -149,6 +150,7 @@ def verify_email(request, uidb64, token):
     except(TypeError, ValueError, OverflowError, User.DoesNotExist):
         return JsonResponse({'message': 'INVALID_USER'}, status=400)
 
+
 def check_username(request):
     username = request.GET.get('username', None)
     if not username:
@@ -156,7 +158,8 @@ def check_username(request):
     is_taken = User.objects.filter(username=username).exists()
     return JsonResponse({'is_available': not is_taken})
 
-@login_required # 토큰 인증용 데코레이터 사용
+
+@login_required # 토큰 인증용 데코레이터
 def get_user_info(request):
     user = request.user
     return JsonResponse({
@@ -165,7 +168,8 @@ def get_user_info(request):
         'email': user.email
     }, status=200)
 
-@login_required # 토큰 인증용 데코레이터 사용
+
+@login_required # 토큰 인증용 데코레이터
 def get_likes_received(request):
     likes_received = Like.objects.filter(to_user=request.user)
     users_who_liked_me = [like.from_user for like in likes_received]
@@ -179,14 +183,15 @@ def get_likes_received(request):
             'id': user.id,
             'username': user.username,
             'name': user.first_name,
-            'major': user.profile.major,
-            'grade': user.profile.grade,
+            'major': user.profile.major if hasattr(user, 'profile') else None,
+            'grade': user.profile.grade if hasattr(user, 'profile') else None,
             'like_status': status
         })
     return JsonResponse({'results': results})
 
+
 @csrf_exempt
-@login_required # 토큰 인증용 데코레이터 사용
+@login_required # 토큰 인증용 데코레이터
 def like_user(request, user_id):
     if request.method == 'POST':
         to_user = get_object_or_404(User, id=user_id)
@@ -209,7 +214,8 @@ def like_user(request, user_id):
     
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
 
-@login_required # 토큰 인증용 데코레이터 사용
+
+@login_required # 토큰 인증용 데코레이터
 def recommend_users(request):
     try:
         user = request.user
@@ -239,7 +245,11 @@ def recommend_users(request):
         if profile.gender != 'both':
             mutual_filter &= (Q(profile__preferred_gender=profile.gender) | Q(profile__preferred_gender='both'))
 
-        recommended_users = users_with_age.filter(base_filter & my_preference_filter & mutual_filter)
+        # 이미 '좋아요'를 보냈거나 받은 사용자는 추천 목록에서 제외 (선택 사항)
+        # liked_or_received = Q(likes_sent__to_user=user) | Q(likes_received__from_user=user)
+        # final_filter = base_filter & my_preference_filter & mutual_filter & ~liked_or_received
+
+        recommended_users = users_with_age.filter(base_filter & my_preference_filter & mutual_filter).distinct()
         
         results = []
         my_likes = Like.objects.filter(from_user=request.user).values_list('to_user_id', flat=True)
@@ -250,16 +260,65 @@ def recommend_users(request):
                 'id': r_user.id,
                 'username': r_user.username,
                 'name': r_user.first_name,
-                'major': r_user.profile.major,
-                'grade': r_user.profile.grade,
+                'major': r_user.profile.major if hasattr(r_user, 'profile') else None,
+                'grade': r_user.profile.grade if hasattr(r_user, 'profile') else None,
                 'like_status': status
             })
 
         return JsonResponse({'results': results})
     except Profile.DoesNotExist:
-        return JsonResponse({'message': 'PROFILE_NOT_FOUND'}, status=404)
+        return JsonResponse({'results': [], 'message': 'PROFILE_NOT_FOUND'}, status=200) # 404 대신 200과 빈 목록 반환
     except Exception as e:
         return JsonResponse({'message': str(e)}, status=500)
+
+@login_required
+def get_chat_list(request):
+    user = request.user
+    print(f"--- 🕵️  채팅 목록 조회 시작: 현재 사용자 = {user.username} (ID: {user.id}) ---")
+
+    # 1. 내가 메시지를 보낸 상대방들의 ID 목록
+    sent_to_ids = list(ChatMessage.objects.filter(sender=user).values_list('receiver_id', flat=True))
+    print(f"   - 내가 메시지를 보낸 상대 ID 목록: {sent_to_ids}")
+    
+    # 2. 나에게 메시지를 보낸 상대방들의 ID 목록
+    received_from_ids = list(ChatMessage.objects.filter(receiver=user).values_list('sender_id', flat=True))
+    print(f"   - 나에게 메시지를 보낸 상대 ID 목록: {received_from_ids}")
+    
+    # 3. 두 목록을 합쳐서 중복 없는 최종 상대방 ID 목록을 만듦
+    partner_ids = set(sent_to_ids + received_from_ids)
+    print(f"   - >> 최종 대화 상대 ID 목록 (중복 제거): {partner_ids}")
+
+    chat_list = []
+    if not partner_ids:
+        print("   - 대화 상대를 찾지 못하여 빈 목록을 반환합니다.")
+    
+    for partner_id in partner_ids:
+        print(f"   - 파트너 ID {partner_id}의 마지막 메시지 찾는 중...")
+        try:
+            partner = User.objects.get(id=partner_id)
+            
+            last_message = ChatMessage.objects.filter(
+                (Q(sender=user, receiver=partner) | Q(sender=partner, receiver=user))
+            ).latest('timestamp')
+
+            chat_list.append({
+                'partner': {
+                    'id': partner.id,
+                    'username': partner.username,
+                    'name': partner.first_name,
+                },
+                'last_message': last_message.content,
+                'timestamp': last_message.timestamp.isoformat()
+            })
+            print(f"   - 파트너 ID {partner_id} 처리 완료.")
+        except (User.DoesNotExist, ChatMessage.DoesNotExist):
+            print(f"   - 파트너 ID {partner_id} 처리 중 오류 발생, 건너뜁니다.")
+            continue
+
+    chat_list.sort(key=lambda x: x['timestamp'], reverse=True)
+    print(f"--- 🕵️  채팅 목록 조회 완료: {len(chat_list)}개의 대화 발견 ---")
+
+    return JsonResponse({'results': chat_list})
 
 
 # --- HTML 페이지 렌더링을 위한 View들 ---
@@ -271,3 +330,6 @@ def main_page(request):
 
 def chat_room(request, user2_id):
     return render(request, 'chat.html', {'user2_id': user2_id})
+
+def chat_list_page(request):
+    return render(request, 'chat_list.html')
