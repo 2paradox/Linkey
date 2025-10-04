@@ -1,5 +1,16 @@
+# Environments
 .env
 venv/
-__pycache__/
-*.pyc
+
+# Django
 db.sqlite3
+staticfiles/
+*.pyc
+
+# Python cache
+__pycache__/
+.pytest_cache/
+
+# Docker
+.dockerignore
+docker-compose.yml.docker-compose.override.yml
