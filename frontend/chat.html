@@ -2,11 +2,16 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale-1.0">
     <title>채팅</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; margin: 0; background-color: #f4f7f6; }
-        .chat-container { max-width: 600px; margin: 50px auto; background-color: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; height: 80vh; }
+        /* --- 👇 헤더 스타일 추가 👇 --- */
+        .header { background-color: white; padding: 15px 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .header a { color: #333; text-decoration: none; font-weight: bold; }
+        .header h2 { margin: 0; font-size: 20px; }
+        /* --- --- */
+        .chat-container { max-width: 600px; margin: 30px auto; background-color: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; height: calc(80vh - 60px); }
         .chat-log { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
         .message { display: flex; flex-direction: column; margin-bottom: 15px; max-width: 80%; }
         .message.sent { align-self: flex-end; align-items: flex-end; }
@@ -17,121 +22,104 @@
         .sender-name { font-size: 12px; color: #666; margin: 0 8px 4px; }
         .chat-input { display: flex; padding: 20px; border-top: 1px solid #ddd; }
         #chat-message-input { flex-grow: 1; border: 1px solid #ccc; border-radius: 20px; padding: 10px 15px; font-size: 16px; }
-        #chat-message-submit { background-color: #007bff; color: white; border: none; border-radius: 50%; width: 45px; height: 45px; font-size: 20px; margin-left: 10px; cursor: pointer; }
+        #chat-message-submit { background-color: #007bff; color: white; border: none; border-radius: 50%; width: 45px; height: 45px; font-size: 20px; margin-left: 10px; cursor: pointer; transition: background-color 0.2s; }
+        #chat-message-submit:disabled { background-color: #6c757d; cursor: not-allowed; }
     </style>
 </head>
 <body>
+    <header class="header">
+        <a href="/chats/">‹ 뒤로가기</a>
+        <h2>채팅</h2>
+        <div></div>
+    </header>
     <div class="chat-container">
         <div id="chat-log" class="chat-log"></div>
         <div class="chat-input">
-            <input id="chat-message-input" type="text" autocomplete="off">
-            <button id="chat-message-submit">➤</button>
+            <input id="chat-message-input" type="text" autocomplete="off" placeholder="메시지 입력...">
+            <button id="chat-message-submit" disabled>➤</button>
         </div>
     </div>
 
     {{ user2_id|json_script:"user2_id" }}
 
     <script>
-        const user2_id = JSON.parse(document.getElementById('user2_id').textContent);
-        const chatLog = document.getElementById('chat-log');
-        const messageInput = document.getElementById('chat-message-input');
-        const messageSubmit = document.getElementById('chat-message-submit');
-        const token = localStorage.getItem('accessToken');
-        
-        let my_username = ''; // 나중에 채워질 내 아이디 변수
+        // JavaScript 부분은 이전과 동일합니다.
+        window.addEventListener('load', () => {
+            const user2_id = JSON.parse(document.getElementById('user2_id').textContent);
+            const chatLog = document.getElementById('chat-log');
+            const messageInput = document.getElementById('chat-message-input');
+            const messageSubmit = document.getElementById('chat-message-submit');
+            const token = localStorage.getItem('accessToken');
+            let my_username = '';
 
-        // --- 로직 전체 재구성 ---
-        async function initializeChat() {
-            // 1. 토큰이 없으면 로그인 페이지로
-            if (!token) {
-                alert('로그인이 필요합니다.');
-                window.location.href = '/';
-                return;
-            }
-
-            // 2. /api/users/me API를 호출해서 내 정보를 가져옴
-            try {
-                const response = await fetch('/api/users/me', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!response.ok) throw new Error('Failed to fetch user info');
-                
-                const myInfo = await response.json();
-                my_username = myInfo.username; // 내 아이디를 변수에 저장
-
-                // 3. 내 정보 로딩 성공 후, WebSocket 연결 시작
-                setupWebSocket();
-
-            } catch (error) {
-                console.error('Failed to initialize chat:', error);
-                alert('사용자 정보를 불러오는 데 실패했습니다. 다시 로그인해주세요.');
-                window.location.href = '/';
-            }
-        }
-
-        function setupWebSocket() {
-            const chatSocket = new WebSocket(
-                'ws://' + window.location.host + '/ws/chat/' + user2_id + '/?token=' + token
-            );
-
-            chatSocket.onmessage = function(e) {
-                const data = JSON.parse(e.data);
-                const messageElement = document.createElement('div');
-                
-                messageElement.classList.add('message');
-                if (data.sender_username === my_username) { // 이제 my_username 변수는 정확한 값을 가짐
-                    messageElement.classList.add('sent');
-                } else {
-                    messageElement.classList.add('received');
+            async function initializeChat() {
+                if (!token) {
+                    alert('로그인이 필요합니다.');
+                    window.location.href = '/';
+                    return;
                 }
-                
-                messageElement.innerHTML = `
-                    <div class="sender-name">${data.sender_username}</div>
-                    <div class="message-content">${data.message}</div>
-                `;
-                chatLog.appendChild(messageElement);
-                chatLog.scrollTop = chatLog.scrollHeight;
-            };
-
-            chatSocket.onclose = function(e) {
-                console.error('Chat socket closed unexpectedly');
-            };
-
-            messageInput.focus();
-            messageInput.onkeyup = function(e) {
-                if (e.key === 'Enter') { messageSubmit.click(); }
-            };
-
-            messageSubmit.onclick = function(e) {
-            console.log("--- 🕵️ 보내기 버튼 클릭됨 ---");
-            const message = messageInput.value;
-
-            // 1. WebSocket의 현재 상태를 확인합니다.
-            // (1: OPEN, 3: CLOSED)
-            console.log(" - 현재 WebSocket 상태:", chatSocket.readyState);
-
-            if (message.trim() === '') {
-                console.log(" - 메시지가 비어있어 전송하지 않음");
-                return;
+                try {
+                    const response = await fetch('/api/users/me', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!response.ok) throw new Error('Failed to fetch user info');
+                    const myInfo = await response.json();
+                    my_username = myInfo.username;
+                    setupWebSocket();
+                } catch (error) {
+                    alert('사용자 정보를 불러오는 데 실패했습니다. 다시 로그인해주세요.');
+                    window.location.href = '/';
+                }
             }
 
-            // 2. 연결이 열려있는 상태(OPEN)일 때만 메시지를 보냅니다.
-            if (chatSocket.readyState === WebSocket.OPEN) { // WebSocket.OPEN은 숫자 1입니다.
-                console.log(" - 연결이 열려있어 메시지 전송 시도:", message);
-                chatSocket.send(JSON.stringify({
-                    'message': message
-                }));
-                messageInput.value = '';
-                console.log(" - 메시지 전송 시도 완료");
-            } else {
-                console.log(" - WebSocket이 열려있지 않아 메시지를 전송할 수 없음!");
-                alert("서버와 연결이 끊어졌습니다. 페이지를 새로고침 해주세요.");
-            }
-        };
-        }
+            function setupWebSocket() {
+                const chatSocket = new WebSocket(
+                    'ws://' + window.location.host + '/ws/chat/' + user2_id + '/?token=' + token
+                );
 
-        // 페이지가 로드되면 채팅 초기화 함수 실행
-        window.addEventListener('load', initializeChat);
+                chatSocket.onopen = function(e) {
+                    console.log("Chat socket successfully opened.");
+                    messageSubmit.disabled = false;
+                    messageInput.focus();
+                };
+
+                chatSocket.onmessage = function(e) {
+                    const data = JSON.parse(e.data);
+                    const messageElement = document.createElement('div');
+                    messageElement.classList.add('message');
+                    if (data.sender_username === my_username) {
+                        messageElement.classList.add('sent');
+                    } else {
+                        messageElement.classList.add('received');
+                    }
+                    messageElement.innerHTML = `
+                        <div class="sender-name">${data.sender_username}</div>
+                        <div class="message-content">${data.message}</div>
+                    `;
+                    chatLog.appendChild(messageElement);
+                    chatLog.scrollTop = chatLog.scrollHeight;
+                };
+
+                chatSocket.onclose = function(e) {
+                    console.error('Chat socket closed unexpectedly');
+                    messageSubmit.disabled = true;
+                };
+
+                messageInput.onkeyup = function(e) {
+                    if (e.key === 'Enter') { messageSubmit.click(); }
+                };
+
+                messageSubmit.onclick = function(e) {
+                    const message = messageInput.value;
+                    if (message.trim() === '') return;
+                    if (chatSocket.readyState === WebSocket.OPEN) {
+                        chatSocket.send(JSON.stringify({ 'message': message }));
+                        messageInput.value = '';
+                    }
+                };
+            }
+            initializeChat();
+        });
     </script>
 </body>
 </html>

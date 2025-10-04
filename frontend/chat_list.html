@@ -13,11 +13,10 @@
         .chat-item:hover { background-color: #fafafa; }
         .chat-info { flex-grow: 1; }
         .chat-partner { font-weight: bold; margin: 0 0 5px; }
-        .last-message { color: #666; font-size: 14px; margin: 0; }
+        .last-message { color: #666; font-size: 14px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .chat-meta { display: flex; flex-direction: column; align-items: flex-end; }
         .timestamp { font-size: 12px; color: #999; margin-bottom: 5px; }
-        /* --- 👇 안 읽은 메시지 배지 스타일 추가 👇 --- */
-        .unread-badge { background-color: #ff4d4d; color: white; font-size: 12px; font-weight: bold; border-radius: 50%; width: 22px; height: 22px; display: flex; justify-content: center; align-items: center; }
+        .unread-badge { background-color: #ff4d4d; color: white; font-size: 12px; font-weight: bold; border-radius: 50%; min-width: 22px; height: 22px; padding: 0 5px; box-sizing: border-box; display: flex; justify-content: center; align-items: center; }
     </style>
 </head>
 <body>
@@ -43,52 +42,121 @@
                 return;
             }
 
-            try {
-                const response = await fetch(`${API_BASE_URL}/chats/`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!response.ok) throw new Error('Failed to fetch chat list');
-                
-                const data = await response.json();
-                
-                chatListContainer.innerHTML = '';
-                if (data.results.length === 0) {
-                    chatListContainer.innerHTML = '<p>아직 대화가 없습니다.</p>';
-                    return;
-                }
+            // --- 실시간 알림을 위한 웹소켓 연결 함수 ---
+            function setupNotificationSocket() {
+                const notificationSocket = new WebSocket(
+                    'ws://' + window.location.host + '/ws/notifications/?token=' + token
+                );
 
-                data.results.forEach(chat => {
-                    const chatItem = document.createElement('a');
-                    chatItem.className = 'chat-item';
-                    chatItem.href = `/chat/${chat.partner.id}/`;
+                notificationSocket.onopen = function(e) {
+                    console.log("Notification socket connected successfully.");
+                };
+
+                notificationSocket.onmessage = function(e) {
+                    const data = JSON.parse(e.data);
                     
-                    const date = new Date(chat.timestamp);
-                    const formattedDate = date.toLocaleDateString('ko-KR');
-
-                    // --- 👇 안 읽은 개수에 따라 배지를 동적으로 추가 👇 ---
-                    let unreadHtml = '';
-                    if (chat.unread_count > 0) {
-                        unreadHtml = `<div class="unread-badge">${chat.unread_count}</div>`;
+                    if (data.notification_type === 'new_message') {
+                        console.log("New message notification received:", data);
+                        updateChatList(data);
                     }
+                };
 
-                    chatItem.innerHTML = `
+                notificationSocket.onclose = function(e) {
+                    console.error('Notification socket closed unexpectedly. Attempting to reconnect...');
+                    setTimeout(setupNotificationSocket, 3000); // 3초 뒤 재연결 시도
+                };
+            }
+
+            // --- 채팅 목록을 동적으로 업데이트하는 함수 ---
+            function updateChatList(data) {
+                let chatItem = document.querySelector(`.chat-item[data-partner-id="${data.sender_id}"]`);
+                
+                if (chatItem) { // 이미 목록에 있다면
+                    chatItem.querySelector('.last-message').textContent = data.last_message;
+                    chatItem.querySelector('.timestamp').textContent = new Date(data.timestamp).toLocaleDateString('ko-KR');
+                    
+                    const badge = chatItem.querySelector('.unread-badge');
+                    if (badge) {
+                        badge.textContent = parseInt(badge.textContent) + 1;
+                    } else {
+                        const metaDiv = chatItem.querySelector('.chat-meta');
+                        metaDiv.innerHTML += `<div class="unread-badge">1</div>`;
+                    }
+                    chatListContainer.prepend(chatItem);
+                } else { // 목록에 없다면 (첫 메시지)
+                    const newChatItem = document.createElement('a');
+                    newChatItem.className = 'chat-item';
+                    newChatItem.href = `/chat/${data.sender_id}/`;
+                    newChatItem.dataset.partnerId = data.sender_id;
+                    
+                    newChatItem.innerHTML = `
                         <div class="chat-info">
-                            <p class="chat-partner">${chat.partner.name} (${chat.partner.username})</p>
-                            <p class="last-message">${chat.last_message}</p>
+                            <p class="chat-partner">${data.sender_name} (${data.sender_username})</p>
+                            <p class="last-message">${data.last_message}</p>
                         </div>
                         <div class="chat-meta">
-                            <div class="timestamp">${formattedDate}</div>
-                            ${unreadHtml}
+                            <div class="timestamp">${new Date(data.timestamp).toLocaleDateString('ko-KR')}</div>
+                            <div class="unread-badge">1</div>
                         </div>
                     `;
-                    // --- ---
-                    chatListContainer.appendChild(chatItem);
-                });
-
-            } catch (error) {
-                console.error('Failed to load chat list:', error);
-                chatListContainer.innerHTML = '<p>채팅 목록을 불러오는 데 실패했습니다.</p>';
+                    // '대화 없음' 메시지가 있다면 지우고 추가
+                    const noChatMessage = chatListContainer.querySelector('p');
+                    if (noChatMessage) noChatMessage.remove();
+                    chatListContainer.prepend(newChatItem);
+                }
             }
+
+            // --- 페이지 로드 시 채팅 목록 불러오기 (기존 함수) ---
+            async function loadInitialChatList() {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/chats/`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!response.ok) throw new Error('Failed to fetch chat list');
+                    const data = await response.json();
+                    
+                    chatListContainer.innerHTML = '';
+                    if (data.results.length === 0) {
+                        chatListContainer.innerHTML = '<p>아직 대화가 없습니다.</p>';
+                        return;
+                    }
+
+                    data.results.forEach(chat => {
+                        const chatItem = document.createElement('a');
+                        chatItem.className = 'chat-item';
+                        chatItem.href = `/chat/${chat.partner.id}/`;
+                        chatItem.dataset.partnerId = chat.partner.id; // 실시간 업데이트를 위해 ID 추가
+                        
+                        const date = new Date(chat.timestamp);
+                        const formattedDate = date.toLocaleDateString('ko-KR');
+
+                        let unreadHtml = '';
+                        if (chat.unread_count > 0) {
+                            unreadHtml = `<div class="unread-badge">${chat.unread_count}</div>`;
+                        }
+
+                        chatItem.innerHTML = `
+                            <div class="chat-info">
+                                <p class="chat-partner">${chat.partner.name} (${chat.partner.username})</p>
+                                <p class="last-message">${chat.last_message}</p>
+                            </div>
+                            <div class="chat-meta">
+                                <div class="timestamp">${formattedDate}</div>
+                                ${unreadHtml}
+                            </div>
+                        `;
+                        chatListContainer.appendChild(chatItem);
+                    });
+                } catch (error) {
+                    console.error('Failed to load chat list:', error);
+                    chatListContainer.innerHTML = '<p>채팅 목록을 불러오는 데 실패했습니다.</p>';
+                }
+            }
+
+            // 1. 초기 목록 로드
+            await loadInitialChatList();
+            // 2. 실시간 알림 연결 시작
+            setupNotificationSocket();
         });
     </script>
 </body>
