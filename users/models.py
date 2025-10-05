@@ -35,6 +35,12 @@ class Profile(models.Model):
     # 3. 학교/학과/학년
     major = models.CharField(max_length=100, choices=MAJOR_CHOICES, null=True, blank=True)
     grade = models.PositiveIntegerField(null=True, blank=True)
+
+    image = models.ImageField(upload_to='profile_pics', default='default.jpg')
+
+
+
+
     def __str__(self):
         return self.user.username
 

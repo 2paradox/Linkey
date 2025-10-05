@@ -146,11 +146,15 @@ def check_username(request):
 @login_required
 def get_user_info(request):
     user = request.user
+    # --- 👇 총 안 읽은 메시지 개수 계산 로직 추가 👇 ---
+    total_unread_count = ChatMessage.objects.filter(receiver=user, is_read=False).count()
+
     return JsonResponse({
         'id': user.id,
         'username': user.username,
-        'email': user.email
-    }, status=200)
+        'email': user.email,
+        'total_unread_count': total_unread_count # 응답에 포함
+    })
 
 @csrf_exempt
 @login_required
@@ -179,21 +183,31 @@ def like_user(request, user_id):
 @login_required
 def get_likes_received(request):
     user = request.user
-    likes = Like.objects.filter(to_user=user)
-    users_who_liked_me = [like.from_user for like in likes]
-    my_likes_sent_ids = Like.objects.filter(from_user=user).values_list('to_user_id', flat=True)
     
+    # 나를 좋아한 사람들의 User 객체 목록
+    likes_received = Like.objects.filter(to_user=user)
+    users_who_liked_me = [like.from_user for like in likes_received]
+    
+    # 내가 좋아한 사람들의 ID 목록
+    my_likes_sent_ids = set(Like.objects.filter(from_user=user).values_list('to_user_id', flat=True))
+
     results = []
     for u in users_who_liked_me:
+        # --- 👇 로직 수정 👇 ---
+        # 내가 상대방을 좋아했는지(상호 매칭인지) 확인
         status = 'mutual' if u.id in my_likes_sent_ids else 'they_liked_me'
+        
         results.append({
             'id': u.id,
             'username': u.username,
             'name': u.first_name,
             'major': u.profile.major if hasattr(u, 'profile') else None,
             'grade': u.profile.grade if hasattr(u, 'profile') else None,
-            'like_status': status
+            'like_status': status,
+            'profile_image_url': request.build_absolute_uri(u.profile.image.url) if hasattr(u, 'profile') and u.profile.image else None,
+            'gender': u.profile.gender if hasattr(u, 'profile') else None # <-- 이 줄 추가
         })
+            
     return JsonResponse({'results': results})
 
 @login_required
@@ -202,6 +216,10 @@ def recommend_users(request):
         user = request.user
         profile = user.profile
         today = date.today()
+
+        my_likes_sent_ids = set(Like.objects.filter(from_user=user).values_list('to_user_id', flat=True))
+        users_who_liked_me_ids = set(Like.objects.filter(to_user=user).values_list('from_user_id', flat=True))
+        mutual_like_ids = my_likes_sent_ids.intersection(users_who_liked_me_ids)
 
         users_with_age = User.objects.annotate(age=today.year - ExtractYear('profile__birth_date'))
         my_age = users_with_age.get(id=user.id).age
@@ -222,22 +240,20 @@ def recommend_users(request):
         if profile.gender != 'both':
             mutual_filter &= (Q(profile__preferred_gender=profile.gender) | Q(profile__preferred_gender='both'))
 
-        # 이미 '좋아요'를 보냈거나 받은 사용자는 추천 목록에서 제외
-        liked_user_ids = Like.objects.filter(from_user=user).values_list('to_user_id', flat=True)
-        users_who_liked_me_ids = Like.objects.filter(to_user=user).values_list('from_user_id', flat=True)
-        exclude_ids = set(list(liked_user_ids) + list(users_who_liked_me_ids))
-
-        recommended_users = users_with_age.filter(base_filter & my_preference_filter & mutual_filter).exclude(id__in=exclude_ids).distinct()
+        recommended_users = users_with_age.filter(base_filter & my_preference_filter & mutual_filter).exclude(id__in=mutual_like_ids).distinct()
         
         results = []
         for r_user in recommended_users:
+            status = 'i_liked_them' if r_user.id in my_likes_sent_ids else 'none'
             results.append({
                 'id': r_user.id,
                 'username': r_user.username,
                 'name': r_user.first_name,
                 'major': r_user.profile.major if hasattr(r_user, 'profile') else None,
                 'grade': r_user.profile.grade if hasattr(r_user, 'profile') else None,
-                'like_status': 'none' # 추천 목록에서는 항상 'none'
+                'like_status': status,
+                'profile_image_url': request.build_absolute_uri(r_user.profile.image.url) if hasattr(r_user, 'profile') and r_user.profile.image else None,
+                'gender': r_user.profile.gender if hasattr(r_user, 'profile') else None # <-- 이 줄 추가
             })
         return JsonResponse({'results': results})
     except Profile.DoesNotExist:
@@ -272,6 +288,44 @@ def get_chat_list(request):
     chat_list.sort(key=lambda x: x['timestamp'], reverse=True)
     return JsonResponse({'results': chat_list})
 
+@csrf_exempt
+@login_required
+def user_profile(request):
+    if request.method == 'GET':
+        user = request.user
+        profile = user.profile
+        return JsonResponse({
+            'username': user.username,
+            'profile_image_url': request.build_absolute_uri(profile.image.url) if profile.image else None,
+        })
+
+    if request.method == 'PUT':
+        user = request.user
+        profile = user.profile
+        
+        # request.POST는 텍스트 데이터(username), request.FILES는 파일 데이터(image)를 담고 있습니다.
+        new_username = request.POST.get('username')
+        image_file = request.FILES.get('image')
+
+        if new_username:
+            # 중복 사용자 이름 체크 (선택 사항이지만 추가하는 것이 좋음)
+            if User.objects.filter(username=new_username).exclude(pk=user.pk).exists():
+                return JsonResponse({'message': 'USERNAME_ALREADY_EXISTS'}, status=400)
+            user.username = new_username
+            user.save()
+
+        if image_file:
+            profile.image = image_file
+            profile.save()
+
+        return JsonResponse({
+            'message': 'PROFILE_UPDATED_SUCCESSFULLY',
+            'username': user.username,
+            'profile_image_url': request.build_absolute_uri(profile.image.url) if profile.image else None,
+        })
+        
+    return JsonResponse({'message': 'INVALID_METHOD'}, status=405)
+
 # --- HTML 페이지 렌더링 ---
 def home(request):
     return render(request, 'index.html')
@@ -284,3 +338,6 @@ def chat_list_page(request):
 
 def chat_room(request, user2_id):
     return render(request, 'chat.html', {'user2_id': user2_id})
+
+def profile_page(request):
+    return render(request, 'profile.html')

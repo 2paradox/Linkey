@@ -14,4 +14,5 @@ urlpatterns = [
     path('likes-received/', views.get_likes_received, name='get_likes_received'),
     # 'chats/' 경로는 API를 위한 get_chat_list 하나만 남깁니다.
     path('chats/', views.get_chat_list, name='get_chat_list'),
+    path('profile/', views.user_profile, name='user_profile'),
 ]

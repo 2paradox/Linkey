@@ -3,61 +3,197 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>메인 페이지</title>
+    <title>Linkey</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; margin: 0; background-color: #f4f7f6; }
-        .header { background-color: white; padding: 15px 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
-        .header h2 { margin: 0; font-size: 20px; }
-        .header button { padding: 8px 15px; font-size: 14px; font-weight: bold; cursor: pointer; background: #dc3545; color: white; border: none; border-radius: 8px; }
-        .container { max-width: 800px; margin: 30px auto; padding: 20px; }
-        h2.section-title { border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; color: #333; }
-        #recommendation-list, #likes-received-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-bottom: 40px; }
-        .card { background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); padding: 20px; text-align: center; display: flex; flex-direction: column; justify-content: space-between; min-height: 150px; }
-        .card h3 { margin-top: 0; margin-bottom: 10px; font-size: 18px; }
-        .card p { margin: 5px 0; color: #666; font-size: 14px; }
-        .like-button, .chat-button { width: 100%; padding: 10px; margin-top: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
-        .like-button { background-color: #ff4d4d; color: white; }
-        .chat-button { background-color: #007bff; color: white; text-decoration: none; display: inline-block; box-sizing: border-box; }
-        .my-chats-button {
-            margin-right: 15px;
+        /* --- 👇 CSS 스타일 전체 리디자인 👇 --- */
+        :root {
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-color: #212529;
+            --subtext-color: #6c757d;
+            --accent-gradient: linear-gradient(90deg, #ff8a00, #e52e71);
+            --shadow-color: rgba(0, 0, 0, 0.08);
+        }
+
+        body {
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .header {
+            background-color: var(--card-bg);
+            padding: 15px 30px;
+            box-shadow: 0 2px 10px var(--shadow-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .header h2 { margin: 0; font-size: 20px; font-weight: 700; }
+        .header-buttons { display: flex; align-items: center; gap: 10px; }
+        .header-buttons .header-link {
             padding: 8px 15px;
             font-size: 14px;
-            font-weight: bold;
-            background-color: #17a2b8; /* 버튼 색상 */
+            font-weight: 600;
+            color: var(--subtext-color);
+            border: none;
+            border-radius: 20px;
+            text-decoration: none;
+            transition: all 0.2s ease-in-out;
+            position: relative;
+        }
+        .header-buttons .header-link:hover { color: var(--text-color); background-color: #f1f1f1; }
+        .notification-badge {
+            position: absolute; top: 0px; right: 0px;
+            background-color: #e52e71;
+            color: white; font-size: 10px; font-weight: bold;
+            border-radius: 50%; width: 18px; height: 18px;
+            display: flex; justify-content: center; align-items: center;
+            border: 2px solid var(--card-bg);
+        }
+        #logout-button {
+            padding: 8px 15px; font-size: 14px; font-weight: 600;
+            background: none; border: none; color: var(--subtext-color); cursor: pointer;
+        }
+        #logout-button:hover { color: #dc3545; }
+
+        .container { max-width: 960px; margin: 40px auto; padding: 20px; }
+        h2.section-title { font-size: 24px; font-weight: 700; border: none; padding-bottom: 10px; margin-bottom: 20px; }
+        
+        #recommendation-list, #likes-received-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 4px 25px var(--shadow-color);
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.2s ease-in-out;
+        }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px var(--shadow-color); }
+        .card-image {
+            width: 100px; height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin: 0 auto 15px;
+            border: 4px solid var(--card-bg);
+            box-shadow: 0 4px 15px var(--shadow-color);
+        }
+        .card h3 { margin-top: 0; margin-bottom: 5px; font-size: 18px; font-weight: 600; }
+        .card p { margin: 2px 0; color: var(--subtext-color); font-size: 14px; }
+        
+        .like-button, .chat-button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        .like-button {
+            background: var(--accent-gradient);
             color: white;
-            border-radius: 8px;
-            text-decoration: none; /* 밑줄 제거 */
+        }
+        .like-button:hover { transform: scale(1.05); }
+        .like-button:disabled {
+            background: #e9ecef;
+            color: var(--subtext-color);
+            transform: none;
+        }
+        .chat-button {
+            background-color: #212529;
+            color: white;
+            text-decoration: none;
+            display: inline-block;
+            box-sizing: border-box;
+        }
+        .chat-button:hover { transform: scale(1.05); }
+        .hidden { display: none; }
+        .gender-icon {
+            display: inline-block;
+            width: 1em; /* 폰트 크기에 맞춰 너비 조절 */
+            height: 1em; /* 폰트 크기에 맞춰 높이 조절 */
+            margin-left: 6px;
+            vertical-align: middle; /* 이름과 수직 정렬 */
+            stroke-width: 2; /* 아이콘 선 굵기 */
+            stroke: var(--subtext-color); /* 아이콘 색상 */
+            fill: none;
         }
     </style>
 </head>
 <body>
     <header class="header">
-        <h2 id="user-info">불러오는 중...</h2>
-        <div>
-            <a href="/chats/" class="my-chats-button">내 채팅</a>
-            <button id="logout-button">로그아웃</button>
+        <h2 id="user-info">...</h2>
+        <div class="header-buttons">
+            <a href="/profile/" class="header-link">My Profile</a>
+            <a href="/chats/" class="header-link my-chats-button">
+                Chats
+                <span id="chat-notification-badge" class="notification-badge hidden">0</span>
+            </a>
+            <button id="logout-button">Log Out</button>
         </div>
     </header>
 
     <main class="container">
-        <h2 class="section-title">👀 나를 좋아한 사람</h2>
+        <h2 class="section-title">👀 People who liked you</h2>
         <div id="likes-received-list"></div>
-
-        <h2 class="section-title">💖 추천 상대</h2>
+        <h2 class="section-title">💖 Recommended for you</h2>
         <div id="recommendation-list"></div>
     </main>
 
     <script>
-        // 페이지의 모든 HTML 요소가 로드된 후에 이 스크립트를 실행합니다.
+        // JavaScript 로직은 이전과 동일하게 작동합니다.
         window.addEventListener('load', async () => {
             const API_BASE_URL = '/api/users';
             const userInfoDiv = document.getElementById('user-info');
             const logoutButton = document.getElementById('logout-button');
             const recommendationListDiv = document.getElementById('recommendation-list');
             const likesReceivedListDiv = document.getElementById('likes-received-list');
+            const chatNotificationBadge = document.getElementById('chat-notification-badge');
             const token = localStorage.getItem('accessToken');
 
-            // --- '좋아요' 버튼 클릭을 처리하는 함수 ---
+            function updateChatBadge(count) {
+                if (count > 0) {
+                    chatNotificationBadge.textContent = count;
+                    chatNotificationBadge.classList.remove('hidden');
+                } else {
+                    chatNotificationBadge.classList.add('hidden');
+                }
+            }
+
+            function setupNotificationSocket() {
+                const notificationSocket = new WebSocket('ws://' + window.location.host + '/ws/notifications/?token=' + token);
+                notificationSocket.onmessage = function(e) {
+                    const data = JSON.parse(e.data);
+                    if (data.notification_type === 'new_message') {
+                        const currentCount = parseInt(chatNotificationBadge.textContent) || 0;
+                        updateChatBadge(currentCount + 1);
+                    }
+                };
+                notificationSocket.onclose = function(e) {
+                    console.error('Notification socket closed. Reconnecting...');
+                    setTimeout(setupNotificationSocket, 3000);
+                };
+            }
+
             async function handleLikeClick(event) {
                 if (event.target && event.target.classList.contains('like-button')) {
                     const button = event.target;
@@ -69,32 +205,27 @@
                         });
                         const data = await response.json();
                         if (data.status === 'mutual') {
-                            button.textContent = '채팅하기 💬';
+                            button.textContent = 'Chat 💬';
                             button.classList.remove('like-button');
                             button.classList.add('chat-button');
                             button.onclick = () => { window.location.href = `/chat/${userId}/`; };
-                            alert('매칭 성공! 이제 채팅할 수 있습니다.');
+                            alert('It\'s a Match! You can now chat.');
                         } else if (data.status === 'liked' || data.status === 'already_liked') {
-                            button.textContent = '요청 보냄 ✅';
+                            button.textContent = 'Liked ✅';
                             button.disabled = true;
-                            button.style.backgroundColor = '#6c757d';
                         }
                     } catch (error) {
-                        console.error('좋아요 처리 오류:', error);
-                        alert('오류가 발생했습니다.');
+                        alert('An error occurred.');
                     }
                 }
             }
 
-            // --- API 호출 및 카드 렌더링 함수들 ---
             async function loadLikesReceived(token) {
                 try {
                     const response = await fetch(`${API_BASE_URL}/likes-received/`, { headers: { 'Authorization': `Bearer ${token}` } });
                     const data = await response.json();
                     renderUserCards(data.results, likesReceivedListDiv);
-                } catch (error) {
-                    console.error('받은 좋아요 목록 로딩 오류:', error);
-                }
+                } catch (error) { console.error('Error loading likes:', error); }
             }
 
             async function loadRecommendations(token) {
@@ -102,35 +233,54 @@
                     const response = await fetch(`${API_BASE_URL}/recommendations`, { headers: { 'Authorization': `Bearer ${token}` } });
                     const data = await response.json();
                     renderUserCards(data.results, recommendationListDiv);
-                } catch (error) {
-                    console.error('추천 목록 로딩 오류:', error);
-                }
+                } catch (error) { console.error('Error loading recommendations:', error); }
             }
             
             function renderUserCards(users, container) {
                 container.innerHTML = '';
                 if (users.length === 0) {
-                    container.innerHTML = '<p>해당하는 사용자가 없습니다.</p>';
+                    container.innerHTML = '<p>No users found in this list.</p>';
                     return;
                 }
                 users.forEach(user => {
                     const card = document.createElement('div');
                     card.className = 'card';
-                    
+                    const imageUrl = user.profile_image_url || '/media/default.jpg';
+                    // --- 성별 아이콘 SVG를 결정하는 로직 추가 ---
+                    let genderIconHtml = '';
+                    if (user.gender === 'male') {
+                        // 남자(Mars) 아이콘 SVG
+                        genderIconHtml = `
+                            <svg class="gender-icon" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="19" y1="5" x2="11" y2="13"></line>
+                                <polyline points="19 5 19 9 15 5"></polyline>
+                            </svg>
+                        `;
+                    } else if (user.gender === 'female') {
+                        // 여자(Venus) 아이콘 SVG
+                        genderIconHtml = `
+                            <svg class="gender-icon" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="8" r="5"></circle>
+                                <line x1="12" y1="13" x2="12" y2="22"></line>
+                                <line x1="9" y1="18" x2="15" y2="18"></line>
+                            </svg>
+                        `;
+                    }
                     let buttonHtml = '';
                     if (user.like_status === 'mutual') {
-                        buttonHtml = `<a href="/chat/${user.id}/" class="chat-button">채팅하기 💬</a>`;
+                        buttonHtml = `<a href="/chat/${user.id}/" class="chat-button">Chat 💬</a>`;
                     } else if (user.like_status === 'i_liked_them') {
-                        buttonHtml = `<button class="like-button" disabled style="background-color: #6c757d;">요청 보냄 ✅</button>`;
+                        buttonHtml = `<button class="like-button" disabled>Liked ✅</button>`;
                     } else {
-                        buttonHtml = `<button class="like-button" data-user-id="${user.id}">좋아요 ❤️</button>`;
+                        buttonHtml = `<button class="like-button" data-user-id="${user.id}">Like ❤️</button>`;
                     }
-
                     card.innerHTML = `
                         <div>
-                            <h3>${user.name} (${user.username})</h3>
+                            <img src="${imageUrl}" alt="${user.username}'s profile" class="card-image">
+                            <h3>${user.name} (${user.username})${genderIconHtml}</h3>
                             <p>${user.major}</p>
-                            <p>${user.grade}학년</p>
+                            <p>Grade ${user.grade}</p>
                         </div>
                         ${buttonHtml}
                     `;
@@ -138,18 +288,16 @@
                 });
             }
 
-            // --- 이벤트 리스너 추가 ---
             likesReceivedListDiv.addEventListener('click', handleLikeClick);
             recommendationListDiv.addEventListener('click', handleLikeClick);
             logoutButton.addEventListener('click', () => {
                 localStorage.removeItem('accessToken');
-                alert('로그아웃되었습니다.');
+                alert('Logged out.');
                 window.location.href = '/';
             });
 
-            // --- 페이지 초기화 로직 (가장 마지막에 실행) ---
             if (!token) {
-                alert('로그인이 필요합니다.');
+                alert('Login required.');
                 window.location.href = '/';
                 return;
             }
@@ -158,17 +306,14 @@
                 if (!response.ok) throw new Error('Failed to fetch user info');
                 
                 const myInfo = await response.json();
-                userInfoDiv.textContent = `${myInfo.username}님, 환영합니다!`;
-
-                // 두 목록을 모두 불러옴
-                await Promise.all([
-                    loadLikesReceived(token),
-                    loadRecommendations(token)
-                ]);
-
+                userInfoDiv.textContent = `Welcome, ${myInfo.username}!`;
+                updateChatBadge(myInfo.total_unread_count);
+                
+                await Promise.all([ loadLikesReceived(token), loadRecommendations(token) ]);
+                setupNotificationSocket();
             } catch (error) {
                 console.error('Failed to initialize page:', error);
-                alert('사용자 정보를 불러오는 데 실패했습니다. 다시 로그인해주세요.');
+                alert('Failed to load user info. Please log in again.');
                 localStorage.removeItem('accessToken');
                 window.location.href = '/';
             }

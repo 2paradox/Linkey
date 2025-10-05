@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>내 정보 수정</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; margin: 0; background-color: #f4f7f6; }
+        .header { background-color: white; padding: 15px 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .header a { color: #333; text-decoration: none; font-weight: bold; }
+        .container { max-width: 500px; margin: 50px auto; padding: 40px; background-color: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #333; margin-top: 0; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input { width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        #profile-image-preview { max-width: 150px; max-height: 150px; border-radius: 50%; display: block; margin: 10px auto; object-fit: cover; }
+        button { width: 100%; padding: 12px; font-size: 16px; font-weight: bold; cursor: pointer; background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%); color: white; border: none; border-radius: 8px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <a href="/main/">‹ 메인으로</a>
+        <h2>내 정보 수정</h2>
+        <div></div>
+    </header>
+
+    <main class="container">
+        <form id="profile-form">
+            <div class="form-group">
+                <label for="profile-image">프로필 사진</label>
+                <img id="profile-image-preview" src="" alt="Profile preview">
+                <input type="file" id="profile-image-input" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label for="username-input">사용자 이름</label>
+                <input type="text" id="username-input" required>
+            </div>
+            <button type="submit">저장하기</button>
+        </form>
+    </main>
+
+    <script>
+        window.addEventListener('load', async () => {
+            const token = localStorage.getItem('accessToken');
+            const usernameInput = document.getElementById('username-input');
+            const imageInput = document.getElementById('profile-image-input');
+            const imagePreview = document.getElementById('profile-image-preview');
+            const profileForm = document.getElementById('profile-form');
+
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/';
+                return;
+            }
+
+            // 1. 페이지 로드 시, 현재 프로필 정보를 불러옴
+            try {
+                const response = await fetch('/api/users/profile/', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                usernameInput.value = data.username;
+                imagePreview.src = data.profile_image_url || 'https://via.placeholder.com/150'; // 기본 이미지
+            } catch (error) {
+                console.error('프로필 로딩 오류:', error);
+            }
+
+            // 2. 새로운 이미지 파일을 선택하면 미리보기를 보여줌
+            imageInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    imagePreview.src = URL.createObjectURL(file);
+                }
+            });
+
+            // 3. '저장하기' 버튼을 누르면 프로필 업데이트 API 호출
+            profileForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+
+                const formData = new FormData();
+                formData.append('username', usernameInput.value);
+                
+                if (imageInput.files[0]) {
+                    formData.append('image', imageInput.files[0]);
+                }
+
+                try {
+                    const response = await fetch('/api/users/profile/', {
+                        method: 'PUT',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        // 중요: FormData를 보낼 때는 Content-Type을 직접 설정하지 않음
+                        // 브라우저가 알아서 multipart/form-data로 설정해 줌
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        alert('프로필이 성공적으로 업데이트되었습니다.');
+                        const data = await response.json();
+                        imagePreview.src = data.profile_image_url;
+                    } else {
+                        const errorData = await response.json();
+                        alert(`업데이트 실패: ${errorData.message}`);
+                    }
+                } catch (error) {
+                    console.error('프로필 업데이트 오류:', error);
+                    alert('프로필 업데이트 중 오류가 발생했습니다.');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
